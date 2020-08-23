@@ -1,9 +1,10 @@
-/*jslint browser: true, forin: true, eqeq: true, white: true, sloppy: true, vars: true, nomen: true */
 /*global $, jQuery, _, asm, common, config, controller, dlgfx, format, header, html, tableform, validate */
 
 $(function() {
 
-    var report_export = {
+    "use strict";
+
+    const report_export = {
 
         model: function() {
             var table = {
@@ -33,7 +34,7 @@ $(function() {
         },
 
         render: function() {
-            var s = "";
+            let s = "";
             this.model();
             if (controller.rows) {
                 s += html.content_header(_("Export Reports as CSV"));

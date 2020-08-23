@@ -1,6 +1,6 @@
 Non-Neutered/Spayed Adopted Animals 
 ###
-Auditing
+Movements
 ###
 Any
 ###
@@ -20,7 +20,7 @@ INNER JOIN adoption ad ON a.ActiveMovementID = ad.ID
 INNER JOIN owner o ON o.ID = ad.OwnerID
 WHERE a.Neutered = 0 AND DeceasedDate Is Null AND ad.MovementType = 1 
 AND ad.MovementDate >= '$ASK DATE Adopted between$' AND ad.MovementDate <= '$ASK DATE and$'
-ORDER BY t.AnimalType, a.AnimalName
+ORDER BY ad.MovementDate, t.AnimalType, a.AnimalName
 ###
 $$HEADER
 <table border="1">
@@ -59,5 +59,6 @@ BODY$$
 
 $$FOOTER
 </table>
+<h2>Total animals: {COUNT.ANIMALNAME}</h2>
 FOOTER$$
 

@@ -1,15 +1,16 @@
-/*jslint browser: true, forin: true, eqeq: true, white: true, sloppy: true, vars: true, nomen: true */
-/*global $, jQuery, _, asm, common, config, controller, dlgfx, format, header, html, validate */
+/*global $, jQuery, _, asm, common, config, controller, dlgfx, edit_header, format, header, html, validate */
 
 $(function() {
 
-    var shelterview = {
+    "use strict";
+
+    const shelterview = {
 
         /**
          * Renders an animal thumbnail
          */
         render_animal: function(a, showunit, allowdrag) {
-            var h = [];
+            let h = [];
             h.push('<div ');
             if (allowdrag) {
                 h.push('class="asm-shelterview-animal animaldragtarget" ');
@@ -17,7 +18,11 @@ $(function() {
             else {
                 h.push('class="asm-shelterview-animal" ');
             }
-            h.push('data="' + a.ID + '">');
+            h.push('data-animal="' + a.ID + '" ');
+            h.push('data-location="' + a.SHELTERLOCATION + '" ');
+            h.push('data-unit="' + a.SHELTERLOCATIONUNIT + '" ');
+            h.push('data-person="' + a.CURRENTOWNERID + '" ');
+            h.push('>');
             h.push(html.animal_link_thumb(a, {showunit: showunit}));
             h.push('</div>');
             return h.join("\n");
@@ -30,26 +35,72 @@ $(function() {
          * multiple times in this one if it has multiple flags.
          */
         render_flags: function() {
-            var h = [];
+            let h = [], ht = [], c = 0;
             $.each(controller.flags, function(i, f) {
-                // Output the flag
-                h.push('<p class="asm-menu-category">' + f.FLAG + '</p>');
-                // Output every animal who has this flag
+                ht = [];
+                c = 0;
+                // Build output for every animal who has this flag
                 $.each(controller.animals, function(ia, a) {
                     if (!a.ADDITIONALFLAGS) { return; }
-                    var aflags = a.ADDITIONALFLAGS.split("|");
+                    let aflags = a.ADDITIONALFLAGS.split("|");
                     $.each(aflags, function(x, af) {
                         if (af == f.FLAG) {
-                            h.push(shelterview.render_animal(a, false, !a.ACTIVEMOVEMENTTYPE && a.ARCHIVED == 0));
+                            c += 1;
+                            ht.push(shelterview.render_animal(a, false, !a.ACTIVEMOVEMENTTYPE && a.ARCHIVED == 0));
                         }
                     });
                 });
+                // Output the flag if some animals had it
+                if (c > 0) {
+                    h.push('<p class="asm-menu-category">' + f.FLAG + ' (' + c + ')</p>');
+                    h.push(ht.join("\n"));
+                }
             });
             // Output all animals who don't have any flags
-            h.push('<p class="asm-menu-category">' + _("(none)") + '</p>');
+            ht = [];
+            c = 0; 
             $.each(controller.animals, function(ia, a) {
                 if (!a.ADDITIONALFLAGS || a.ADDITIONALFLAGS == '|') {
-                    h.push(shelterview.render_animal(a, false, !a.ACTIVEMOVEMENTTYPE && a.ARCHIVED == 0));
+                    c += 1;
+                    ht.push(shelterview.render_animal(a, false, !a.ACTIVEMOVEMENTTYPE && a.ARCHIVED == 0));
+                }
+            });
+            if (c > 0) {
+                h.push('<p class="asm-menu-category">' + _("(none)") + ' (' + c + ')</p>');
+                h.push(ht.join("\n"));
+            }
+            // Load the whole thing into the DOM
+            $("#viewcontainer").html(h.join("\n"));
+        },
+
+        /** 
+         * Renders a specialised shelterview that shows good with
+         * and housetrained, along with all animals that have a positive value.
+         * It's a special view because the same animal can appear
+         * multiple times in this one if it has multiple matches.
+         */
+        render_goodwith: function() {
+            let h = [];
+            let gw = [
+                [ "ISGOODWITHCATS", 0, _("Good with cats") ],
+                [ "ISGOODWITHDOGS", 0, _("Good with dogs") ],
+                [ "ISGOODWITHCHILDREN", 0, _("Good with children") ],
+                [ "ISGOODWITHCHILDREN", 5, _("Good with children over 5") ],
+                [ "ISGOODWITHCHILDREN", 12, _("Good with children over 12") ],
+                [ "ISHOUSETRAINED", 0, _("Housetrained") ]
+            ];
+            $.each(gw, function(i, v) {
+                let ht = [], c = 0;
+                $.each(controller.animals, function(ia, a) {
+                    if (a[v[0]] == v[1]) {
+                        c += 1;
+                        ht.push(shelterview.render_animal(a, false, !a.ACTIVEMOVEMENTTYPE && a.ARCHIVED == 0));
+                    }
+                });
+                // Output the category and matching animals if there were any
+                if (c > 0) {
+                    h.push('<p class="asm-menu-category">' + v[2] + ' (' + c + ')</p>');
+                    h.push(ht.join("\n"));
                 }
             });
             // Load the whole thing into the DOM
@@ -62,17 +113,17 @@ $(function() {
          * and occupied units show animal links.
          */
         render_units_available: function() {
-            var h = [];
+            let h = [];
             $.each(controller.locations, function(il, l) {
                 // If the location is empty and this one is retired, stop now
                 if (shelterview.location_is_empty(l.ID) && l.ISRETIRED && l.ISRETIRED == 1) { return; }
                 // Output the location
-                var loclink = "animal_find_results?logicallocation=onshelter&shelterlocation=" + l.ID;
+                let loclink = "animal_find_results?logicallocation=onshelter&shelterlocation=" + l.ID;
                 h.push('<p class="asm-menu-category"><a href="' + loclink + '">' + 
                     l.LOCATIONNAME + '</a></p>');
                 // If the location has no units, just output a single unit for the location
                 if (!common.trim(common.nulltostr(l.UNITS))) { 
-                    var boxinner = [], classes = "unitdroptarget asm-shelterview-unit";
+                    let boxinner = [], classes = "unitdroptarget asm-shelterview-unit";
                     $.each(controller.animals, function(ia, a) {
                         if (a.ACTIVEMOVEMENTID == 0 && a.SHELTERLOCATION == l.ID) {
                             boxinner.push(shelterview.render_animal(a, false, !a.ACTIVEMOVEMENTTYPE && a.ARCHIVED == 0));
@@ -91,7 +142,7 @@ $(function() {
                         // If the unit name is blank, skip it
                         if (!u) { return; }
                         // Find all animals in this unit and construct the inner
-                        var boxinner = [], classes = "unitdroptarget asm-shelterview-unit";
+                        let boxinner = [], classes = "unitdroptarget asm-shelterview-unit";
                         $.each(controller.animals, function(ia, a) {
                             if (a.ACTIVEMOVEMENTID == 0 && a.SHELTERLOCATION == l.ID && a.SHELTERLOCATIONUNIT == u) {
                                 boxinner.push(shelterview.render_animal(a, false, !a.ACTIVEMOVEMENTTYPE && a.ARCHIVED == 0));    
@@ -107,12 +158,12 @@ $(function() {
                     // Find any animals who were in the location but didn't match one of the
                     // set units. Put them in an "invalid" unit that they can be dragged out of
                     // but not dropped into.
-                    var badunit = [];
+                    let badunit = [];
                     $.each(controller.animals, function(ia, a) {
                         // Skip animals not in this location
                         if (a.SHELTERLOCATION != l.ID) { return; }
                         if (a.ACTIVEMOVEMENTID != 0) { return; }
-                        var validunit = false;
+                        let validunit = false;
                         $.each(l.UNITS.split(","), function(iu, u) {
                             u = common.trim(u);
                             if (a.ACTIVEMOVEMENTID == 0 && a.SHELTERLOCATIONUNIT == u) {
@@ -146,10 +197,13 @@ $(function() {
                         $(this).removeClass("transparent");
                     },
                     drop: function(event, ui) {
-                        var locationid = $(this).attr("data-location");
-                        var unit = $(this).attr("data-unit");
-                        var animalid = $(ui.draggable).attr("data");
-                        var droptarget = $(this);
+                        let locationid = $(this).attr("data-location");
+                        let unit = $(this).attr("data-unit");
+                        let animalid = $(ui.draggable).attr("data-animal");
+                        let curlocationid = $(ui.draggable).attr("data-location");
+                        let curunit = $(ui.draggable).attr("data-unit");
+                        if (locationid == curlocationid && unit == curunit) { shelterview.reload(); return; } // Same location and unit, do nothing
+                        let droptarget = $(this);
                         header.show_loading(_("Moving..."));
                         common.ajax_post("shelterview", "mode=moveunit&locationid=" + locationid + "&unit=" + encodeURIComponent(unit) + "&animalid=" + animalid)
                             .always(function() {
@@ -173,10 +227,10 @@ $(function() {
          * capacity and allows dragging/dropping between fosterers.
          */
         render_foster_available: function(activeonly) {
-            var h = [];
+            let h = [];
             $.each(controller.fosterers, function(ip, p) {
                 // Output the fosterers
-                var loclink = "person_movements?id=" + p.ID, fh = [], nofosters = 0, capacity = p.FOSTERCAPACITY, extraclasses;
+                let loclink = "person_movements?id=" + p.ID, fh = [], nofosters = 0, capacity = p.FOSTERCAPACITY, extraclasses;
                 // Find any animals who are with this fosterer
                 $.each(controller.animals, function(ia, a) {
                     // Skip animals not in this location
@@ -188,7 +242,9 @@ $(function() {
                 if (nofosters < capacity) { extraclasses = "asm-shelterview-unit-available"; }
                 if (nofosters == 0 && activeonly) { return; }
                 h.push('<p class="asm-menu-category"><a href="' + loclink + '">' + 
-                    p.OWNERNAME + ' (' + nofosters + '/' + capacity + ')</a></p>' +
+                    p.OWNERNAME + ' (' + nofosters + '/' + capacity + ')</a> ' +
+                    '<span class="asm-search-personflags">' + edit_header.person_flags(p) + '</span>' + 
+                    '</p>' +
                     '<div style="min-height: 110px" class="persondroptarget ' + extraclasses + '" data-person="' + p.ID + '">' +
                     fh.join("\n") +
                     '</div>');
@@ -207,9 +263,11 @@ $(function() {
                         $(this).removeClass("transparent");
                     },
                     drop: function(event, ui) {
-                        var personid = $(this).attr("data-person");
-                        var animalid = $(ui.draggable).attr("data");
-                        var droptarget = $(this);
+                        let personid = $(this).attr("data-person");
+                        let animalid = $(ui.draggable).attr("data-animal");
+                        let curpersonid = $(ui.draggable).attr("data-person");
+                        if (curpersonid == personid) { shelterview.reload(); return; } // Same person, do nothing
+                        let droptarget = $(this);
                         header.show_loading(_("Moving..."));
                         common.ajax_post("shelterview", "mode=movefoster&personid=" + personid + "&animalid=" + animalid)
                             .always(function() {
@@ -234,7 +292,7 @@ $(function() {
          * filterfunction: A function to call to decide whether or not to include an animal
          */
         render_view: function(groupfield, groupfield2, sorton, dragdrop, translategroup, filterfunction) {
-            var h = [], lastgrp = "", lastgrp2 = "", grpdisplay = "", grplink = "", runningtotal = 0, i, 
+            let h = [], lastgrp = "", lastgrp2 = "", grpdisplay = "", grplink = "", runningtotal = 0, i, 
                 locationsused = [], showunit = (groupfield == "DISPLAYLOCATIONNAME");
             // Sort the rows for the view
             controller.animals.sort( common.sort_multi(sorton) );
@@ -258,6 +316,10 @@ $(function() {
                     lastgrp2 = "";
                     // Produce an appropriate link based on the group field
                     grplink = "#";
+                    if (groupfield == "SHELTERLOCATIONNAME") {
+                        grplink = "animal_find_results?logicallocation=onshelter&shelterlocation=" + a.SHELTERLOCATION;
+                        locationsused.push(a.SHELTERLOCATION);
+                    }
                     if (groupfield == "DISPLAYLOCATIONNAME") {
                         grplink = "animal_find_results?logicallocation=onshelter&shelterlocation=" + a.SHELTERLOCATION;
                         locationsused.push(a.SHELTERLOCATION);
@@ -279,19 +341,19 @@ $(function() {
                             grplink = "animal_find_results?logicallocation=adoptable";
                         }
                         if (a.ADOPTIONSTATUS == _("Not For Adoption")) {
-                            grplink = "animal_find_results?logicallocation=notforadoption";
+                            grplink = "animal_find_results?logicallocation=onshelter&flags=notforadoption";
                         }
                         if (a.ADOPTIONSTATUS == _("Reserved")) {
                             grplink = "move_book_reservation";
                         }
                         if (a.ADOPTIONSTATUS == _("Cruelty Case")) {
-                            grplink = "animal_find_results?logicallocation=onshelter&showcrueltycaseonly=on";
+                            grplink = "animal_find_results?logicallocation=onshelter&flags=crueltycase";
                         }
                         if (a.ADOPTIONSTATUS == _("Hold")) {
                             grplink = "animal_find_results?logicallocation=hold";
                         }
                         if (a.ADOPTIONSTATUS == _("Quarantine")) {
-                            grplink = "animal_find_results?logicallocation=quarantine";
+                            grplink = "animal_find_results?logicallocation=onshelter&flags=quarantine";
                         }
                     }
                     if (groupfield == "CURRENTOWNERNAME" && a.CURRENTOWNERID) {
@@ -319,7 +381,7 @@ $(function() {
                     h.push('<div class="asm-shelterview-unit">');
                     h.push('<div><span class="asm-shelterview-secondgroup">' + lastgrp2 + '</span></div>');
                 }
-                h.push(shelterview.render_animal(a, true, !a.ACTIVEMOVEMENTTYPE && a.ARCHIVED == 0));
+                h.push(shelterview.render_animal(a, true, dragdrop));
                 runningtotal += 1;
             });
             if (lastgrp != "") { 
@@ -333,10 +395,10 @@ $(function() {
             }
             // If we're sorting on location, find any locations that were unused
             // and output a section for them - unless they're retired
-            if (groupfield == "DISPLAYLOCATIONNAME" && config.bool("ShelterViewShowEmpty")) {
+            if (config.bool("ShelterViewShowEmpty") && (groupfield == "DISPLAYLOCATIONNAME" || groupfield == "SHELTERLOCATIONNAME")) {
                 $.each(controller.locations, function(i, v) {
                     if ($.inArray(v.ID, locationsused) == -1 && !v.ISRETIRED) {
-                        var loclink = "animal_find_results?logicallocation=onshelter&shelterlocation=" + v.ID;
+                        let loclink = "animal_find_results?logicallocation=onshelter&shelterlocation=" + v.ID;
                         h.push('<p class="asm-menu-category"><a href="' + loclink + '">' + 
                             v.LOCATIONNAME + ' (0)</a></p>');
                         h.push('<div style="min-height: 70px" class="locationdroptarget" data="' + v.ID + '">');
@@ -358,10 +420,12 @@ $(function() {
                         $(this).removeClass("transparent");
                     },
                     drop: function(event, ui) {
-                        var locationid = $(this).attr("data-location");
-                        var locationname = common.get_field(controller.locations, locationid, "LOCATIONNAME");
-                        var animalid = $(ui.draggable).attr("data");
-                        var droptarget = $(this);
+                        let locationid = $(this).attr("data-location");
+                        let locationname = common.get_field(controller.locations, locationid, "LOCATIONNAME");
+                        let animalid = $(ui.draggable).attr("data-animal");
+                        let curlocationid = $(ui.draggable).attr("data-location");
+                        if (locationid == curlocationid) { shelterview.reload(); return; } // Same location, do nothing
+                        let droptarget = $(this);
                         header.show_loading(_("Moving..."));
                         common.ajax_post("shelterview", "mode=movelocation&locationid=" + locationid + "&animalid=" + animalid)
                             .always(function() {
@@ -370,6 +434,7 @@ $(function() {
                                 $.each(controller.animals, function(i, a) {
                                     if (a.ID == animalid) {
                                         a.SHELTERLOCATION = locationid;
+                                        a.SHELTERLOCATIONNAME = locationname;
                                         a.DISPLAYLOCATIONNAME = locationname;
                                         return false;
                                     }
@@ -389,7 +454,7 @@ $(function() {
 
         /** Returns true if location id has no animals in it */
         location_is_empty: function(id) {
-            var empty = true;
+            let empty = true;
             $.each(controller.animals, function(ia, a) {
                 if (a.ACTIVEMOVEMENTID == 0 && a.SHELTERLOCATION == id) {
                     empty = false;
@@ -414,7 +479,7 @@ $(function() {
                 this.render_view("ADOPTIONCOORDINATORNAME", "", "ADOPTIONCOORDINATORNAME,ANIMALNAME", false, false);
             }
             else if (viewmode == "coordinatorfosterer") {
-                this.render_view("ADOPTIONCOORDINATORNAME", "CURRENTOWNERNAME", "ADOPTIONCOORDINATORNAME,CURRENTOWNERNAME,ANIMALNAME", false, false, function(a) { return a.ACTIVEMOVEMENTTYPE == 2; });
+                this.render_view("ADOPTIONCOORDINATORNAME", "CURRENTOWNERNAME", "ADOPTIONCOORDINATORNAME,CURRENTOWNERNAME,ANIMALNAME", false, false);
             }
             else if (viewmode == "entrycategory") {
                 this.render_view("ENTRYREASONNAME", "", "ENTRYREASONNAME,ANIMALNAME", false, false);
@@ -428,8 +493,17 @@ $(function() {
             else if (viewmode == "fostereractive") {
                 this.render_foster_available(true);
             }
+            else if (viewmode == "goodwith") {
+                this.render_goodwith();
+            }
             else if (viewmode == "location") {
                 this.render_view("DISPLAYLOCATIONNAME", "", "DISPLAYLOCATIONNAME,ANIMALNAME", true, false);
+            }
+            else if (viewmode == "locationnv") {
+                this.render_view("SHELTERLOCATIONNAME", "", "SHELTERLOCATIONNAME,ANIMALNAME", true, false);
+            }
+            else if (viewmode == "locationbreed") {
+                this.render_view("DISPLAYLOCATIONNAME", "BREEDNAME", "DISPLAYLOCATIONNAME,BREEDNAME,ANIMALNAME", true, false);
             }
             else if (viewmode == "locationspecies") {
                 this.render_view("DISPLAYLOCATIONNAME", "SPECIESNAME", "DISPLAYLOCATIONNAME,SPECIESNAME,ANIMALNAME", true, false);
@@ -458,6 +532,9 @@ $(function() {
             else if (viewmode == "species") {
                 this.render_view("SPECIESNAME", "", "SPECIESNAME,ANIMALNAME", false, false);
             }
+            else if (viewmode == "speciescode") {
+                this.render_view("SPECIESNAME", "", "SPECIESNAME,CODE", false, false);
+            }
             else if (viewmode == "status") {
                 this.render_view("ADOPTIONSTATUS", "", "ADOPTIONSTATUS,ANIMALNAME", false, true);
             }
@@ -479,6 +556,7 @@ $(function() {
                 if (a.ARCHIVED == 0 && a.ISHOLD == 1) { a.ADOPTIONSTATUS = _("Hold"); return; }
                 if (a.ARCHIVED == 0 && a.HASACTIVERESERVE == 1) { a.ADOPTIONSTATUS = _("Reserved"); return; }
                 if (a.ARCHIVED == 0 && a.HASPERMANENTFOSTER == 1) { a.ADOPTIONSTATUS = _("Permanent Foster"); return; }
+                if (a.ARCHIVED == 0 && a.HASTRIALADOPTION == 1) { a.ADOPTIONSTATUS = _("Trial Adoption"); return; }
                 if (html.is_animal_adoptable(a)[0]) { a.ADOPTIONSTATUS = _("Adoptable"); return; } 
                 a.ADOPTIONSTATUS = _("Not For Adoption"); 
             });
@@ -501,7 +579,7 @@ $(function() {
         },
 
         render: function() {
-            var h = [];
+            let h = [];
             h.push('<div id="asm-content" class="ui-helper-reset ui-widget-content ui-corner-all" style="padding: 10px;">');
             h.push('<select id="viewmode" style="float: right;" class="asm-selectbox">');
             h.push('<option value="altered">' + _("Altered") + '</option>');
@@ -512,21 +590,25 @@ $(function() {
             h.push('<option value="flags">' + _("Flags") + '</option>');
             h.push('<option value="fosterer">' + _("Fosterer") + '</option>');
             h.push('<option value="fostereractive">' + _("Fosterer (Active Only)") + '</option>');
+            h.push('<option value="goodwith">' + _("Good With") + '</option>');
             h.push('<option value="location">' + _("Location") + '</option>');
+            h.push('<option value="locationbreed">' + _("Location and Breed") + '</option>');
             h.push('<option value="locationspecies">' + _("Location and Species") + '</option>');
             h.push('<option value="locationtype">' + _("Location and Type") + '</option>');
             h.push('<option value="locationunit">' + _("Location and Unit") + '</option>');
+            h.push('<option value="locationnv">' + _("Location (No Virtual)") + '</option>');
             h.push('<option value="name">' + _("Name") + '</option>');
             h.push('<option value="pickuplocation">' + _("Pickup Location") + '</option>');
             h.push('<option value="retailer">' + _("Retailer") + '</option>');
             h.push('<option value="sex">' + _("Sex") + '</option>');
             h.push('<option value="sexspecies">' + _("Sex and Species") + '</option>');
             h.push('<option value="species">' + _("Species") + '</option>');
+            h.push('<option value="speciescode">' + _("Species and Code") + '</option>');
             h.push('<option value="status">' + _("Status") + '</option>');
             h.push('<option value="statusspecies">' + _("Status and Species") + '</option>');
             h.push('<option value="type">' + _("Type") + '</option>');
             h.push('</select>');
-            h.push('<p class="asm-menu-category">' + config.str("Organisation") + '</p>');
+            h.push('<p class="asm-menu-category">' + config.str("Organisation") + ' (' + controller.animals.length + ')</p>');
             h.push('<div id="viewcontainer"></div>');
             h.push('</div>');
             return h.join("\n");

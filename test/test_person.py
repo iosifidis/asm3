@@ -1,10 +1,9 @@
-#!/usr/bin/python env
 
 import unittest
 import base
 
-import person
-import utils
+import asm3.person
+import asm3.utils
 
 class TestPerson(unittest.TestCase):
    
@@ -18,68 +17,120 @@ class TestPerson(unittest.TestCase):
             "ownertype": "1",
             "address": "123 test street"
         }
-        post = utils.PostedData(data, "en")
-        self.nid = person.insert_person_from_form(base.get_dbo(), post, "test")
+        post = asm3.utils.PostedData(data, "en")
+        self.nid = asm3.person.insert_person_from_form(base.get_dbo(), post, "test", geocode=False)
 
     def tearDown(self):
-        person.delete_person(base.get_dbo(), "test", self.nid)
+        asm3.person.delete_person(base.get_dbo(), "test", self.nid)
 
     def test_get_homechecked(self):
-        assert 0 == len(person.get_homechecked(base.get_dbo(), self.nid))
+        assert 0 == len(asm3.person.get_homechecked(base.get_dbo(), self.nid))
 
     def test_get_person(self):
-        person.get_person(base.get_dbo(), self.nid)
+        asm3.person.get_person(base.get_dbo(), self.nid)
 
     def test_get_person_similar(self):
-        assert len(person.get_person_similar(base.get_dbo(), "", "Testing", "Test", "123 street")) > 0
+        assert len(asm3.person.get_person_similar(base.get_dbo(), "", "", "Testing", "Test", "123 street")) > 0
 
     def test_get_person_name(self):
-        assert "" != person.get_person_name(base.get_dbo(), self.nid)
+        assert "" != asm3.person.get_person_name(base.get_dbo(), self.nid)
 
     def test_get_person_name_code(self):
-        assert "" != person.get_person_name_code(base.get_dbo(), self.nid)
+        assert "" != asm3.person.get_person_name_code(base.get_dbo(), self.nid)
 
     def test_get_staff_volunteers(self):
-        person.get_staff_volunteers(base.get_dbo())
+        asm3.person.get_staff_volunteers(base.get_dbo())
 
     def test_get_towns(self):
-        person.get_towns(base.get_dbo())
+        asm3.person.get_towns(base.get_dbo())
 
     def test_get_town_to_county(self):
-        person.get_town_to_county(base.get_dbo())
+        asm3.person.get_town_to_county(base.get_dbo())
 
     def test_get_counties(self):
-        person.get_counties(base.get_dbo())
+        asm3.person.get_counties(base.get_dbo())
 
     def test_get_satellite_counts(self):
-        person.get_satellite_counts(base.get_dbo(), self.nid)
+        asm3.person.get_satellite_counts(base.get_dbo(), self.nid)
 
     def test_get_reserves_without_homechecks(self):
-        person.get_reserves_without_homechecks(base.get_dbo())
+        asm3.person.get_reserves_without_homechecks(base.get_dbo())
 
     def test_get_overdue_donations(self):
-        person.get_overdue_donations(base.get_dbo())
+        asm3.person.get_overdue_donations(base.get_dbo())
+
+    def test_get_signed_requests(self):
+        asm3.person.get_signed_requests(base.get_dbo())
+
+    def test_get_unsigned_requests(self):
+        asm3.person.get_unsigned_requests(base.get_dbo())
 
     def test_get_links(self):
-        person.get_links(base.get_dbo(), self.nid)
+        asm3.person.get_links(base.get_dbo(), self.nid)
 
     def test_get_investigation(self):
-        person.get_investigation(base.get_dbo(), self.nid)
+        asm3.person.get_investigation(base.get_dbo(), self.nid)
 
-    def test_get_rota(self):
-        person.get_rota(base.get_dbo(), base.today(), base.today())
-
-    def test_get_person_rota(self):
-        person.get_person_rota(base.get_dbo(), self.nid)
-
-    def test_update_owner_names(self):
-        person.update_owner_names(base.get_dbo())
- 
     def test_get_person_find_simple(self):
-        assert len(person.get_person_find_simple(base.get_dbo(), "Test", "user")) > 0
+        assert len(asm3.person.get_person_find_simple(base.get_dbo(), "", "test")) > 0
 
     def test_get_person_find_advanced(self):
-        assert len(person.get_person_find_advanced(base.get_dbo(), { "name": "Test" }, "user")) > 0
+        assert len(asm3.person.get_person_find_advanced(base.get_dbo(), {}, "test")) >  0
+
+    def test_get_rota(self):
+        asm3.person.get_rota(base.get_dbo(), base.today(), base.today())
+
+    def test_get_person_rota(self):
+        asm3.person.get_person_rota(base.get_dbo(), self.nid)
+
+    def test_calculate_owner_code(self):
+        assert "TE000005" == asm3.person.calculate_owner_code(5, "test")
+        assert "XX000100" == asm3.person.calculate_owner_code(100, "&#239;Z")
+
+    def test_calculate_owner_name(self):
+        assert "Mr R Robert Robertson" == asm3.person.calculate_owner_name(base.get_dbo(), 1, "Mr", "R", "Robert", "Robertson",
+            "{ownertitle} {ownerinitials} {ownerforenames} {ownersurname}")
+
+    def test_update_owner_names(self):
+        asm3.person.update_owner_names(base.get_dbo())
+
+    def test_update_adopter_flag(self):
+        asm3.person.update_adopter_flag(base.get_dbo(), "test", self.nid)
+
+    def test_merge_person_details(self):
+        asm3.person.merge_person_details(base.get_dbo(), "test", self.nid, {})
+
+    def test_merge_gdpr_flags(self):
+        s = asm3.person.merge_gdpr_flags(base.get_dbo(), "test", self.nid, "email")
+        assert s.find("email") != -1
+
+    def test_merge_flags(self):
+        s = asm3.person.merge_flags(base.get_dbo(), "test", self.nid, "fosterer")
+        assert s.find("fosterer") != -1
+
+    def test_merge_person(self):
+        data = {
+            "title": "Mr",
+            "forenames": "Merge",
+            "surname": "Merging",
+            "ownertype": "1",
+            "address": "456 test street"
+        }
+        post = asm3.utils.PostedData(data, "en")
+        mid = asm3.person.insert_person_from_form(base.get_dbo(), post, "test", geocode=False)
+        asm3.person.merge_person(base.get_dbo(), "test", self.nid, mid)
+
+    def test_get_person_embedded(self):
+        assert asm3.person.get_person_embedded(base.get_dbo(), self.nid) is not None
+
+    def test_embellish_adoption_warnings(self):
+        assert asm3.person.embellish_adoption_warnings(base.get_dbo(), asm3.person.get_person_embedded(base.get_dbo(), self.nid)) is not None
+ 
+    def test_get_person_find_simple(self):
+        assert len(asm3.person.get_person_find_simple(base.get_dbo(), "Test", "user")) > 0
+
+    def test_get_person_find_advanced(self):
+        assert len(asm3.person.get_person_find_advanced(base.get_dbo(), { "name": "Test" }, "user")) > 0
 
     def test_investigation_crud(self):
         data = {
@@ -87,11 +138,11 @@ class TestPerson(unittest.TestCase):
             "date": base.today_display(),
             "notes": "Test"
         }
-        post = utils.PostedData(data, "en")
-        iid = person.insert_investigation_from_form(base.get_dbo(), "test", post)
+        post = asm3.utils.PostedData(data, "en")
+        iid = asm3.person.insert_investigation_from_form(base.get_dbo(), "test", post)
         data["investigationid"] = str(iid)
-        person.update_investigation_from_form(base.get_dbo(), "test", post)
-        person.delete_investigation(base.get_dbo(), "test", iid)
+        asm3.person.update_investigation_from_form(base.get_dbo(), "test", post)
+        asm3.person.delete_investigation(base.get_dbo(), "test", iid)
 
     def test_rota_crud(self):
         data = {
@@ -102,21 +153,24 @@ class TestPerson(unittest.TestCase):
             "endtime": "00:00",
             "type": "1"
         }
-        post = utils.PostedData(data, "en")
-        rid = person.insert_rota_from_form(base.get_dbo(), "test", post)
+        post = asm3.utils.PostedData(data, "en")
+        rid = asm3.person.insert_rota_from_form(base.get_dbo(), "test", post)
         data["rotaid"] = str(rid)
-        person.update_rota_from_form(base.get_dbo(), "test", post)
-        person.delete_rota(base.get_dbo(), "test", rid)
+        asm3.person.update_rota_from_form(base.get_dbo(), "test", post)
+        asm3.person.delete_rota(base.get_dbo(), "test", rid)
 
     def test_update_pass_homecheck(self):
-        person.update_pass_homecheck(base.get_dbo(), "test", self.nid, "")
+        asm3.person.update_pass_homecheck(base.get_dbo(), "test", self.nid, "")
+
+    def test_update_missing_builtin_flags(self):
+        asm3.person.update_missing_builtin_flags(base.get_dbo())
 
     def test_update_missing_geocodes(self):
-        person.update_missing_geocodes(base.get_dbo())
+        asm3.person.update_missing_geocodes(base.get_dbo())
 
     def test_update_lookingfor_report(self):
-        person.update_lookingfor_report(base.get_dbo())
+        asm3.person.update_lookingfor_report(base.get_dbo())
 
     def test_update_anonymise_personal_data(self):
-        person.update_anonymise_personal_data(base.get_dbo(), 1)
+        asm3.person.update_anonymise_personal_data(base.get_dbo(), 1)
 

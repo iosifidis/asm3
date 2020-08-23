@@ -1,20 +1,22 @@
-/*jslint browser: true, forin: true, eqeq: true, white: true, sloppy: true, vars: true, nomen: true */
 /*global $, jQuery, _, asm, common, config, controller, dlgfx, format, header, html, tableform, validate */
 
 $(function() {
 
-    var users = {
+    "use strict";
+
+    const users = {
 
         model: function() {
-            // Add extra location filter options for fosters and trial adoptions
+            // Add extra location filter options
             controller.internallocations.push(
-                { ID: -2, LOCATIONNAME: _("Foster")},
-                { ID: -9, LOCATIONNAME: _("Non-shelter")},
-                { ID: -8, LOCATIONNAME: _("Retailer")},
-                { ID: -1, LOCATIONNAME: _("Adoption")}
+                { ID: -1, LOCATIONNAME: _("Adopted Animals")},
+                { ID: -2, LOCATIONNAME: _("Fostered Animals")},
+                { ID: -12, LOCATIONNAME: _("My Fosters")},
+                { ID: -9, LOCATIONNAME: _("Non-shelter Animals")},
+                { ID: -8, LOCATIONNAME: _("Retailer Animals")}
             );
 
-            var dialog = {
+            const dialog = {
                 add_title: _("Add user"),
                 edit_title: _("Edit user"),
                 helper_text: _("Users need a username, password and at least one role or the superuser flag setting."),
@@ -40,40 +42,43 @@ $(function() {
                     { json_field: "SITEID", post_field: "site", label: _("Site"), type: "select", 
                         options: '<option value="0">' + _("(all)") + '</option>' +  
                             html.list_to_options(controller.sites, "ID", "SITENAME") },
-                    { json_field: "OWNERID", post_field: "person", label: _("Staff record"), type: "person", personfilter: "staff" },
+                    { json_field: "OWNERID", post_field: "person", label: _("Staff record"), type: "person", personfilter: "staff",
+                        callout: _("Link this user account to a staff person record.") + " " +
+                                 _("Once linked, a user account cannot access and edit its linked person record.")
+                    },
                     { json_field: "LOCATIONFILTER", post_field: "locationfilter", label: _("Location Filter"), type: "selectmulti", 
                         options: { rows: controller.internallocations, valuefield: "ID", displayfield: "LOCATIONNAME" },
                         hideif: function() { return !config.bool("LocationFiltersEnabled"); },
                         callout: _("Setting a location filter will prevent this user seeing animals who are not in these locations on shelterview, find animal and search.")
                     },
                     { json_field: "IPRESTRICTION", post_field: "iprestriction", label: _("IP Restriction"), type: "text", classes: "asm-ipbox",
-                      callout: _("IP restriction is a space-separated list of IP netblocks in CIDR notation that this user is *only* permitted to login from (eg: 192.168.0.0/24 127.0.0.0/8). If left blank, the user can login from any address.")
+                        callout: _("IP restriction is a space-separated list of IPv4 addresses or IPv6 prefixes that this user is ONLY permitted to login from.") + " " + 
+                            _("If left blank, the user can login from any IP address.") + 
+                            "\nex: 192.168.0.0/24 172.16.38.21 2001:db8:abcd:0012"
                     }
                 ]
             };
 
-            var table = {
+            const table = {
                 rows: controller.rows,
                 idcolumn: "ID",
-                edit: function(row) {
+                showfilter: false, 
+                edit: async function(row) {
                     if (row.USERNAME == asm.useraccount) { return false; }
-                    tableform.dialog_show_edit(dialog, row)
-                        .then(function() {
-                            tableform.fields_update_row(dialog.fields, row);
-                            users.set_extra_fields(row);
-                            return tableform.fields_post(dialog.fields, "mode=update&userid=" + row.ID, "systemusers");
-                        })
-                        .then(function(response) {
-                            tableform.table_update(table);
-                            tableform.dialog_close();
-                        });
+                    await tableform.dialog_show_edit(dialog, row);
+                    tableform.fields_update_row(dialog.fields, row);
+                    users.set_extra_fields(row);
+                    await tableform.fields_post(dialog.fields, "mode=update&userid=" + row.ID, "systemusers");
+                    tableform.table_update(table);
+                    tableform.dialog_close();
                 },
                 complete: function(row) {
                     if (row.DISABLELOGIN && row.DISABLELOGIN == 1) { return true; }
                     return false;
                 },
                 columns: [
-                    { field: "USERNAME", display: _("Username"), initialsort: true, formatter: function(row) {
+                    { field: "USERNAME", display: _("Username"), initialsort: true, 
+                        formatter: function(row) {
                             if (row.USERNAME == asm.useraccount) {
                                 return row.USERNAME;
                             }
@@ -116,7 +121,7 @@ $(function() {
                     { field: "LOCATIONFILTER", display: _("Location Filter"), 
                         hideif: function() { return !config.bool("LocationFiltersEnabled"); },
                         formatter: function(row) {
-                            var of = [], lf = common.nulltostr(row.LOCATIONFILTER);
+                            let of = [], lf = common.nulltostr(row.LOCATIONFILTER);
                             if (!row.LOCATIONFILTER) { return ""; }
                             $.each(lf.split(/[\|,]+/), function(i, f) {
                                 $.each(controller.internallocations, function(x, v) {
@@ -133,46 +138,41 @@ $(function() {
                 ]
             };
 
-            var buttons = [
-                 { id: "new", text: _("New User"), icon: "new", enabled: "always", 
-                     click: function() { 
-                         tableform.dialog_show_add(dialog)
-                             .then(function() {
-                                 return tableform.fields_post(dialog.fields, "mode=create", "systemusers");
-                             })
-                             .then(function(response) {
-                                 var row = {};
-                                 row.ID = response;
-                                 tableform.fields_update_row(dialog.fields, row);
-                                 users.set_extra_fields(row);
-                                 controller.rows.push(row);
-                                 tableform.table_update(table);
-                                 tableform.dialog_close();
-                             })
-                             .fail(function() {
-                                 tableform.dialog_enable_buttons();   
-                             });
-                     } 
-                 },
-                 { id: "delete", text: _("Delete"), icon: "delete", enabled: "multi", 
-                     click: function() { 
-                         tableform.delete_dialog(null, _("This will permanently remove the selected user accounts. Are you sure?"))
-                             .then(function() {
-                                 tableform.buttons_default_state(buttons);
-                                 var ids = tableform.table_ids(table);
-                                 return common.ajax_post("systemusers", "mode=delete&ids=" + ids);
-                             })
-                             .then(function() {
-                                 tableform.table_remove_selected_from_json(table, controller.rows);
-                                 tableform.table_update(table);
-                             });
-                     } 
-                 },
-                 { id: "reset", text: _("Reset Password"), icon: "auth", enabled: "multi", 
-                     click: function() { 
-                         $("#dialog-reset").dialog("open");
-                     } 
-                 }
+            const buttons = [
+                { id: "new", text: _("New User"), icon: "new", enabled: "always", 
+                    click: async function() { 
+                        await tableform.dialog_show_add(dialog);
+                        try {
+                            let response = await tableform.fields_post(dialog.fields, "mode=create", "systemusers");
+                            let row = {};
+                            row.ID = response;
+                            tableform.fields_update_row(dialog.fields, row);
+                            users.set_extra_fields(row);
+                            controller.rows.push(row);
+                            tableform.table_update(table);
+                            tableform.dialog_close();
+                        }
+                        catch(err) {
+                            log.error(err, err);
+                            tableform.dialog_enable_buttons();   
+                        }
+                    } 
+                },
+                { id: "delete", text: _("Delete"), icon: "delete", enabled: "multi", 
+                    click: async function() { 
+                        await tableform.delete_dialog(null, _("This will permanently remove the selected user accounts. Are you sure?"));
+                        tableform.buttons_default_state(buttons);
+                        let ids = tableform.table_ids(table);
+                        await common.ajax_post("systemusers", "mode=delete&ids=" + ids);
+                        tableform.table_remove_selected_from_json(table, controller.rows);
+                        tableform.table_update(table);
+                    } 
+                },
+                { id: "reset", text: _("Reset Password"), icon: "auth", enabled: "multi", 
+                    click: function() { 
+                        $("#dialog-reset").dialog("open");
+                    } 
+                }
             ];
             this.dialog = dialog;
             this.table = table;
@@ -197,31 +197,31 @@ $(function() {
         },
 
         bind_resetdialog: function() {
-            var resetbuttons = { }, table = users.table;
-            resetbuttons[_("Change Password")] = function() {
+            let resetbuttons = { }, table = users.table;
+            resetbuttons[_("Change Password")] = async function() {
                 validate.reset("dialog-reset");
                 if (!validate.notblank([ "newpassword" ])) { return; }
                 if (!validate.notblank([ "confirmpassword" ])) { return; }
-                if ($.trim($("#newpassword").val()) != $.trim($("#confirmpassword").val())) {
+                if (common.trim($("#newpassword").val()) != common.trim($("#confirmpassword").val())) {
                     header.show_error(_("New password and confirmation password don't match."));
                     return;
                 }
                 $("#dialog-reset").disable_dialog_buttons();
-                var ids = tableform.table_ids(table);
-                common.ajax_post("systemusers", "mode=reset&ids=" + ids + "&password=" + encodeURIComponent($("#newpassword").val()))
-                    .then(function() {
-                        var h = "";
-                        $("#tableform input:checked").each(function() {
-                           var username = $(this).next().text();
-                           $(this).prop("checked", false);
-                           h += _("Password for '{0}' has been reset.").replace("{0}", username) + "<br />";
-                        });
-                        header.show_info(h);
-                    })
-                    .always(function() {
-                        $("#dialog-reset").dialog("close");
-                        $("#dialog-reset").enable_dialog_buttons();
+                let ids = tableform.table_ids(table);
+                try {
+                    await common.ajax_post("systemusers", "mode=reset&ids=" + ids + "&password=" + encodeURIComponent($("#newpassword").val()));
+                    let h = "";
+                    $("#tableform input:checked").each(function() {
+                        let username = $(this).next().text();
+                        $(this).prop("checked", false);
+                        h += _("Password for '{0}' has been reset.").replace("{0}", username) + "<br />";
                     });
+                    header.show_info(h);
+                }
+                finally {
+                    $("#dialog-reset").dialog("close");
+                    $("#dialog-reset").enable_dialog_buttons();
+                }
             };
             resetbuttons[_("Cancel")] = function() {
                 $("#dialog-reset").dialog("close");
@@ -239,7 +239,7 @@ $(function() {
         },
 
         render: function() {
-            var s = "";
+            let s = "";
             this.model();
             s += tableform.dialog_render(this.dialog);
             s += this.render_resetdialog();
@@ -260,8 +260,8 @@ $(function() {
 
         set_extra_fields: function(row) {
             // Build list of ROLES from ROLEIDS
-            var roles = [];
-            var roleids = row.ROLEIDS;
+            let roles = [];
+            let roleids = row.ROLEIDS;
             if ($.isArray(roleids)) { roleids = roleids.join(","); }
             $.each(roleids.split(/[|,]+/), function(i, v) {
                 roles.push(common.get_field(controller.roles, v, "ROLENAME"));

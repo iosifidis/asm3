@@ -1,9 +1,11 @@
-/*jslint browser: true, forin: true, eqeq: true, white: true, sloppy: true, vars: true, nomen: true */
 /*global $, _, asm, common, config, controller, dlgfx, format, header, html, validate */
 
 $(function() {
 
-    var animal_find = {
+    "use strict";
+
+    const animal_find = {
+
         render: function() {
             return [
                 html.content_header(_("Find Animal")),
@@ -166,10 +168,13 @@ $(function() {
                 '<input id="inbetweento" data="inbetweento" class="asm-textbox asm-datebox" />',
                 '</td>',
                 '<td>',
-                '<label for="microchip">' + _("Microchip Number") + '</label>',
+                '<label for="entryreason">' + _("Entry Category") + '</label>',
                 '</td>',
                 '<td>',
-                '<input id="microchip" data="microchip" class="asm-textbox" />',
+                '<select id="entryreason" data="entryreason" class="asm-selectbox">',
+                '<option value="-1">' + _("(all)") + '</option>',
+                html.list_to_options(controller.entryreasons, "ID", "REASONNAME"),
+                '</select>',
                 '</td>',
                 '</tr>',
                 '<tr>',
@@ -186,7 +191,7 @@ $(function() {
                 '<input id="outbetweento" data="outbetweento" class="asm-textbox asm-datebox" />',
                 '</td>',
                 '<td>',
-                '<label for="adoptionno">' + _("Adoption Number") + '</label>',
+                '<label for="adoptionno">' + _("Movement Number") + '</label>',
                 '</td>',
                 '<td>',
                 '<input id="adoptionno" data="adoptionno" class="asm-textbox" />',
@@ -219,7 +224,7 @@ $(function() {
                 '</tr>',
                 '<tr>',
                 '<td>',
-                '<label for="comments">' + _("Comments Contain") + '</label>',
+                '<label for="comments">' + _("Description Contains") + '</label>',
                 '</td>',
                 '<td>',
                 '<input id="comments" data="comments" class="asm-textbox" />',
@@ -256,6 +261,20 @@ $(function() {
                 '</tr>',
                 '<tr>',
                 '<td>',
+                '<label for="microchip">' + _("Microchip Number") + '</label>',
+                '</td>',
+                '<td>',
+                '<input id="microchip" data="microchip" class="asm-textbox" />',
+                '</td>',
+                '<td>',
+                '<label for="tattoo">' + _("Tattoo Number") + '</label>',
+                '</td>',
+                '<td>',
+                '<input id="tattoo" data="tattoo" class="asm-textbox" />',
+                '</td>',
+                '</tr>',
+                '<tr>',
+                '<td>',
                 '<label for="insuranceno">' + _("Insurance No") + '</label>',
                 '</td>',
                 '<td>',
@@ -279,6 +298,7 @@ $(function() {
                 '<option value="fivplus">' + _("FIV+") + '</option>',
                 '<option value="flvplus">' + _("FLV+") + '</option>',
                 '<option value="heartwormplus">' + _("Heartworm+") + '</option>',
+                '<option value="unaltered">' + _("Unaltered") + '</option>',
                 '<option value="includedeceased">' + _("Include deceased animals") + '</option>',
                 '<option value="includenonshelter">' + _("Include non-shelter animals") + '</option>',
                 '<option value="showtransfersonly">' + _("Only show transfers") + '</option>',
@@ -320,7 +340,7 @@ $(function() {
 
         bind: function() {
             // Switch to simple search criteria
-            var simpleMode = function() {
+            const simpleMode = function() {
                 $("#mode").val("SIMPLE");
                 $("#asm-search-selector-advanced").removeClass("asm-link-disabled");
                 $("#asm-search-selector-simple").addClass("asm-link-disabled");
@@ -332,7 +352,7 @@ $(function() {
             };
 
             // Switch to advanced search criteria
-            var advancedMode = function() {
+            const advancedMode = function() {
                 $("#mode").val("ADVANCED");
                 $("input[data='q']").val("");
                 $("#asm-search-selector-simple").removeClass("asm-link-disabled");
@@ -384,13 +404,14 @@ $(function() {
             }
             else {
                 $("#logicallocation").select("value", "all");
-                $("#includedeceased").prop("checked", true);
-                $("#includenonshelter").prop("checked", true);
+                $("#filter option[value='includedeceased']").prop("selected", true);
+                $("#filter option[value='includenonshelter']").prop("selected", true);
+                $("#filter").change();
             }
 
             // Only show the breeds for the selected species
             // The (all) option is displayed by default
-            var changebreedselect1 = function() {
+            const changebreedselect1 = function() {
                 $('optgroup', $('#breedid')).remove();
                 $('#breedp optgroup').clone().appendTo($('#breedid'));
 

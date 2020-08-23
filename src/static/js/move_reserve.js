@@ -1,9 +1,10 @@
-/*jslint browser: true, forin: true, eqeq: true, white: true, sloppy: true, vars: true, nomen: true */
-/*global $, jQuery, _, asm, common, config, controller, dlgfx, format, header, html, validate */
+/*global $, jQuery, _, asm, common, config, controller, dlgfx, format, header, edit_header, html, validate */
 
 $(function() {
 
-    var move_reserve = {
+    "use strict";
+
+    const move_reserve = {
 
         render: function() {
             return [
@@ -12,22 +13,22 @@ $(function() {
                 html.content_header(_("Reserve an animal"), true),
                 '<div id="feeinfo" class="ui-state-highlight ui-corner-all" style="margin-top: 5px; padding: 0 .7em; width: 60%; margin-left: auto; margin-right: auto">',
                 '<p class="centered">',
-                '<span class="ui-icon ui-icon-info" style="float: left; margin-right: .3em;"></span>',
+                '<span class="ui-icon ui-icon-info"></span>',
                 '<span class="subtext"></span>',
                 '</p>',
                 '</div>',
                 '<div id="ownerwarn" class="ui-state-error ui-corner-all" style="margin-top: 5px; padding: 0 .7em; width: 60%; margin-left: auto; margin-right: auto">',
-                '<p class="centered"><span class="ui-icon ui-icon-alert" style="float: left; margin-right: .3em;"></span>',
+                '<p class="centered"><span class="ui-icon ui-icon-alert"></span>',
                 '<span id="warntext" class="centered"></span>',
                 '</p>',
                 '</div>',
                 '<div id="multiplereserve" class="ui-state-error ui-corner-all" style="margin-top: 5px; padding: 0 .7em; width: 60%; margin-left: auto; margin-right: auto">',
-                '<p class="centered"><span class="ui-icon ui-icon-alert" style="float: left; margin-right: .3em;"></span>',
+                '<p class="centered"><span class="ui-icon ui-icon-alert"></span>',
                 '<span class="centered">' + _("This animal already has an active reservation.") + '</span>',
                 '</p>',
                 '</div>',
                 '<div id="notonshelter" class="ui-state-error ui-corner-all" style="margin-top: 5px; padding: 0 .7em; width: 60%; margin-left: auto; margin-right: auto">',
-                '<p class="centered"><span class="ui-icon ui-icon-alert" style="float: left; margin-right: .3em;"></span>',
+                '<p class="centered"><span class="ui-icon ui-icon-alert"></span>',
                 '<span class="centered">' + _("This animal is not on the shelter.") + '</span>',
                 '</p>',
                 '</div>',
@@ -68,6 +69,12 @@ $(function() {
                 '</select>',
                 '</td>',
                 '</tr>',
+                '<tr id="commentsrow">',
+                '<td><label for="comments">' + _("Comments") + '</label></td>',
+                '<td>',
+                '<textarea class="asm-textarea" id="comments" data="comments" rows="3"></textarea>',
+                '</td>',
+                '</tr>',
                 '</table>',
                 html.content_footer(),
                 '<div id="payment"></div>',
@@ -79,7 +86,7 @@ $(function() {
         },
 
         bind: function() {
-            var validation = function() {
+            const validation = function() {
                 // Remove any previous errors
                 header.hide_error();
                 validate.reset();
@@ -96,7 +103,7 @@ $(function() {
                     return false;
                 }
                 // date
-                if ($.trim($("#reservationdate").val()) == "") {
+                if (common.trim($("#reservationdate").val()) == "") {
                     header.show_error(_("This type of movement requires a date."));
                     validate.highlight("reservationdate");
                     return false;
@@ -137,40 +144,45 @@ $(function() {
 
             // Callback when person is changed
             $("#person").personchooser().bind("personchooserchange", function(event, rec) {
+
+                edit_header.person_with_adoption_warnings(rec.ID).then(function(data) {
+                    rec = jQuery.parseJSON(data)[0];
          
-                // Default giftaid if the person is registered
-                $("#payment").payments("option", "giftaid", rec.ISGIFTAID == 1);
-                $("#giftaid1").prop("checked", rec.ISGIFTAID == 1);
+                    // Default giftaid if the person is registered
+                    $("#payment").payments("option", "giftaid", rec.ISGIFTAID == 1);
+                    $("#giftaid1").prop("checked", rec.ISGIFTAID == 1);
 
-                // Owner banned?
-                if (rec.ISBANNED == 1 && config.bool("WarnBannedOwner")) {
-                    $("#warntext").text(_("This person has been banned from adopting animals"));
-                    $("#ownerwarn").fadeIn();
-                    return;
-                }
+                    // Owner banned?
+                    if (rec.ISBANNED == 1 && config.bool("WarnBannedOwner")) {
+                        $("#warntext").text(_("This person has been banned from adopting animals."));
+                        $("#ownerwarn").fadeIn();
+                        return;
+                    }
 
-                // Owner previously under investigation
-                if (rec.INVESTIGATION > 0) {
-                    $("#warntext").html(_("This person has been under investigation"));
-                    $("#ownerwarn").fadeIn();
-                    return;
-                }
+                    // Owner previously under investigation
+                    if (rec.INVESTIGATION > 0) {
+                        $("#warntext").html(_("This person has been under investigation."));
+                        $("#ownerwarn").fadeIn();
+                        return;
+                    }
 
-                // Owner part of animal control incident
-                if (rec.INCIDENT > 0) {
-                    $("#warntext").html(_("This person has an animal control incident against them"));
-                    $("#ownerwarn").fadeIn();
-                    return;
-                }
+                    // Owner part of animal control incident
+                    if (rec.INCIDENT > 0) {
+                        $("#warntext").html(_("This person has an animal control incident against them."));
+                        $("#ownerwarn").fadeIn();
+                        return;
+                    }
 
-                // Owner not homechecked?
-                if (rec.IDCHECK == 0 && config.bool("WarnNoHomeCheck")) {
-                    $("#warntext").text(_("This person has not passed a homecheck"));
-                    $("#ownerwarn").fadeIn();
-                    return;
-                }
+                    // Owner not homechecked?
+                    if (rec.IDCHECK == 0 && config.bool("WarnNoHomeCheck")) {
+                        $("#warntext").text(_("This person has not passed a homecheck."));
+                        $("#ownerwarn").fadeIn();
+                        return;
+                    }
 
-                $("#ownerwarn").fadeOut();
+                    $("#ownerwarn").fadeOut();
+
+                });
 
             });
 
@@ -200,29 +212,25 @@ $(function() {
                 $("#amount1").val("0");
             }
 
-            $("#reserve").button().click(function() {
+            $("#reserve").button().click(async function() {
                 if (!validation()) { return; }
                 $("#reserve").button("disable");
                 header.show_loading(_("Creating..."));
-
-                var formdata = "mode=create&" + $("input, select").toPOST();
-                common.ajax_post("move_reserve", formdata)
-                    .then(function(data) {
-
-                        $("#movementid").val(data);
-
-                        var u = "move_gendoc?" +
-                            "linktype=MOVEMENT&id=" + data + 
-                            "&message=" + encodeURIComponent(common.base64_encode(_("Reservation successfully created.") + " " + 
-                                $(".animalchooser-display").html() + " " + html.icon("right") + " " +
-                                $(".personchooser-display .justlink").html() ));
-                        common.route(u);
-
-                    })
-                    .always(function() {
-                        header.hide_loading();
-                        $("#reserve").button("enable");
-                    });
+                try {
+                    let formdata = "mode=create&" + $("input, select, textarea").toPOST();
+                    let data = await common.ajax_post("move_reserve", formdata);
+                    $("#movementid").val(data);
+                    let u = "move_gendoc?" +
+                        "linktype=MOVEMENT&id=" + data + 
+                        "&message=" + encodeURIComponent(common.base64_encode(_("Reservation successfully created.") + " " + 
+                            $(".animalchooser-display").html() + " " + html.icon("right") + " " +
+                            $(".personchooser-display .justlink").html() ));
+                    common.route(u);
+                }
+                finally { 
+                    header.hide_loading();
+                    $("#reserve").button("enable");
+                }
             });
         },
 

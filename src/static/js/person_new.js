@@ -1,9 +1,10 @@
-/*jslint browser: true, forin: true, eqeq: true, white: true, sloppy: true, vars: true, nomen: true */
-/*global $, jQuery, _, additional, asm, common, config, controller, dlgfx, edit_header, format, geo, header, html, validate */
+/*global $, jQuery, _, additional, asm, common, config, controller, dlgfx, edit_header, format, header, html, validate */
 
 $(function() {
 
-    var person_new = {
+    "use strict";
+
+    const person_new = {
 
         render: function() {
             return [
@@ -25,52 +26,64 @@ $(function() {
                 '</tr>',
                 '<tr class="tag-individual">',
                 '<td><label for="title">' + _("Title") + '</label></td>',
-                '<td><input class="asm-textbox" maxlength="50" id="title" data="title" type="textbox" /></td>',
+                '<td><input class="asm-textbox newform" maxlength="50" id="title" data="title" type="textbox" /></td>',
                 '</tr>',
                 '<tr class="tag-individual">',
                 '<td><label for="initials">' + _("Initials") + '</label></td>',
-                '<td><input class="asm-textbox" maxlength="50" id="initials" data="initials" type="textbox" /></td>',
+                '<td><input class="asm-textbox newform" maxlength="50" id="initials" data="initials" type="textbox" /></td>',
                 '</tr>',
                 '<tr class="tag-individual">',
                 '<td><label for="forenames">' + _("First name(s)") + '</label></td>',
-                '<td><input class="asm-textbox" maxlength="200" id="forenames" data="forenames" type="textbox" /></td>',
+                '<td><input class="asm-textbox newform" maxlength="200" id="forenames" data="forenames" type="textbox" /></td>',
                 '</tr>',
                 '<tr>',
                 '<td><label for="surname" class="tag-individual">' + _("Last name") + '</label>',
                 '<label for="surname" class="tag-organisation">' + _("Organization name") + '</label></td>',
-                '<td><input class="asm-textbox" maxlength="100" id="surname" data="surname" type="textbox" /></td>',
+                '<td><input class="asm-textbox newform" maxlength="100" id="surname" data="surname" type="textbox" /></td>',
                 '</tr>',
                 '<tr>',
                 '<td><label for="address">' + _("Address") + '</label></td>',
-                '<td><textarea class="asm-textareafixed" id="address" data="address" rows="3"></textarea></td>',
+                '<td><textarea class="asm-textareafixed newform" id="address" data="address" rows="3"></textarea></td>',
                 '</tr>',
                 '<tr class="towncounty">',
                 '<td><label for="town">' + _("City") + '</label></td>',
-                '<td><input class="asm-textbox" maxlength="100" id="town" data="town" type="textbox" /></td>',
+                '<td><input class="asm-textbox newform" maxlength="100" id="town" data="town" type="textbox" /></td>',
                 '</tr>',
                 '<tr class="towncounty">',
                 '<td><label for="county">' + _("State") + '</label></td>',
-                '<td><input class="asm-textbox" maxlength="100" id="county" data="county" type="textbox" /></td>',
+                '<td><input class="asm-textbox newform" maxlength="100" id="county" data="county" type="textbox" /></td>',
                 '</tr>',
                 '<tr>',
                 '<td><label for="postcode">' + _("Zipcode") + '</label></td>',
-                '<td><input class="asm-textbox" id="postcode" data="postcode" type="textbox" /></td>',
+                '<td><input class="asm-textbox newform" id="postcode" data="postcode" type="textbox" /></td>',
+                '</tr>',
+                '<tr id="countryrow">',
+                '<td><label for="country">' + _("Country") + '</label></td>',
+                '<td><input class="asm-textbox newform" id="country" data="country" type="textbox" /></td>',
                 '</tr>',
                 '<tr>',
                 '<td><label for="hometelephone">' + _("Home Phone") + '</label></td>',
-                '<td><input class="asm-textbox" id="hometelephone" data="hometelephone" type="textbox" /></td>',
+                '<td><input class="asm-textbox newform" id="hometelephone" data="hometelephone" type="textbox" /></td>',
                 '</tr>',
                 '<tr>',
                 '<td><label for="worktelephone">' + _("Work Phone") + '</label></td>',
-                '<td><input class="asm-textbox" id="worktelephone" data="worktelephone" type="textbox" /></td>',
+                '<td><input class="asm-textbox newform" id="worktelephone" data="worktelephone" type="textbox" /></td>',
                 '</tr>',
                 '<tr>',
                 '<td><label for="mobiletelephone">' + _("Cell Phone") + '</label></td>',
-                '<td><input class="asm-textbox" id="mobiletelephone" data="mobiletelephone" type="textbox" /></td>',
+                '<td><input class="asm-textbox newform" id="mobiletelephone" data="mobiletelephone" type="textbox" /></td>',
                 '</tr>',
                 '<tr>',
                 '<td><label for="emailaddress">' + _("Email Address") + '</label></td>',
-                '<td><input class="asm-textbox" maxlength="200" id="emailaddress" data="emailaddress" type="textbox" /></td>',
+                '<td><input class="asm-textbox newform" maxlength="200" id="emailaddress" data="emailaddress" type="textbox" /></td>',
+                '</tr>',
+                '<tr id="jurisdictionrow">',
+                '<td><label for="jurisdiction">' + _("Jurisdiction") + '</label></td>',
+                '<td>',
+                '<select id="jurisdiction" data="jurisdiction" class="asm-selectbox">',
+                html.list_to_options(controller.jurisdictions, "ID", "JURISDICTIONNAME"),
+                '</select>',
+                '</td>',
                 '</tr>',
                 '<tr>',
                 '<td><label for="flags">' + _("Flags") + '</label></td>',
@@ -87,14 +100,6 @@ $(function() {
                 '</select>',
                 '</td>',
                 '</tr>',
-                '<tr id="jurisdictionrow">',
-                '<td><label for="jurisdiction">' + _("Jurisdiction") + '</label></td>',
-                '<td>',
-                '<select id="jurisdiction" data="jurisdiction" class="asm-selectbox">',
-                html.list_to_options(controller.jurisdictions, "ID", "JURISDICTIONNAME"),
-                '</select>',
-                '</td>',
-                '</tr>',
                 '<tr id="siterow">',
                 '<td><label for="site">' + _("Site") + '</label></td>',
                 '<td>',
@@ -104,7 +109,7 @@ $(function() {
                 '</select>',
                 '</td>',
                 '</tr>',
-                additional.additional_mandatory_fields(controller.additional),
+                additional.additional_new_fields(controller.additional),
                 '</table>',
                 '<input id="latlong" data="latlong" type="hidden" value="" />',
                 '<div class="centered">',
@@ -117,7 +122,7 @@ $(function() {
         },
 
         bind: function() {
-            var validation = function() {
+            const validation = function() {
                 // Remove any previous errors
                 header.hide_error();
                 validate.reset();
@@ -127,47 +132,32 @@ $(function() {
                 return true;
             };
 
-            var addPerson = function() {
+            const add_person = async function() {
                 if (!validation()) { 
                     $("#asm-content button").button("enable"); 
                     return; 
                 }
                 header.show_loading(_("Creating..."));
-                var address = $("#address").val(),
-                    town = $("#town").val(),
-                    county = $("#county").val(),
-                    postcode = $("#postcode").val();
-                var addrhash = geo.address_hash(address, town, county, postcode);
-                var formdata = $("input, textarea, select").not(".chooser").toPOST();
-                common.ajax_post("person_new", formdata)
-                    .then(function(personid) {
-                        if (personid && person_new.create_and_edit) { 
-                            common.route("person?id=" + personid); 
-                        }
-                        else {
-                            header.show_info(_("Person successfully created"));
-                        }
-                        $("#asm-content button").button("enable");
-                        geo.get_lat_long(address, town, county, postcode)
-                            .then(function(lat, lon) {
-                                if (lat) {
-                                    var latlong = lat + "," + lon + "," + addrhash;
-                                    var formdata = "mode=latlong&personid=" + personid + "&latlong=" + latlong;
-                                    common.ajax_post("person", formdata);
-                                }
-                            });
-                    })
-                    .always(function() {
-                        $("#asm-content button").button("enable");
-                    });
-
+                try {
+                    let formdata = $("input, textarea, select").not(".chooser").toPOST();
+                    let personid = await common.ajax_post("person_new", formdata);
+                    if (personid && person_new.create_and_edit) { 
+                        common.route("person?id=" + personid); 
+                    }
+                    else {
+                        header.show_info(_("Person successfully created"));
+                    }
+                }
+                finally {
+                    $("#asm-content button").button("enable");
+                }
             };
 
-            var similar_dialog = function() {
-                var b = {}; 
+            const similar_dialog = function() {
+                let b = {}; 
                 b[_("Create")] = function() {
                     $("#dialog-similar").disable_dialog_buttons();
-                    addPerson();
+                    add_person();
                     $("#asm-content button").button("enable");
                 };
                 b[_("Cancel")] = function() { 
@@ -185,29 +175,27 @@ $(function() {
                 });
             };
 
-            var check_for_similar = function() {
+            const check_for_similar = async function() {
                 if (!validation()) { 
                     $("#asm-content button").button("enable"); 
                     return; 
                 }
-                var formdata = "mode=similar&" + $("#emailaddress, #surname, #forenames, #address").toPOST();
-                common.ajax_post("person_embed", formdata)
-                    .then(function(result) { 
-                        var people = jQuery.parseJSON(result);
-                        var rec = people[0];
-                        if (rec === undefined) {
-                            addPerson();
-                        }
-                        else {
-                            var disp = "<span class=\"justlink\"><a class=\"asm-embed-name\" href=\"person?id=" + rec.ID + "\">" + rec.OWNERNAME + "</a></span>";
-                            disp += "<br/>" + rec.OWNERADDRESS + "<br/>" + rec.OWNERTOWN + "<br/>" + rec.OWNERCOUNTY + "<br/>" + rec.OWNERPOSTCODE + "<br/>" + rec.HOMETELEPHONE + "<br/>" + rec.WORKTELEPHONE + "<br/>" + rec.MOBILETELEPHONE + "<br/>" + rec.EMAILADDRESS;
-                            $(".similar-person").html(disp);
-                            similar_dialog();
-                        }
-                    });
+                let formdata = "mode=similar&" + $("#emailaddress, #mobiletelephone, #surname, #forenames, #address").toPOST();
+                let result = await common.ajax_post("person_embed", formdata);
+                let people = jQuery.parseJSON(result);
+                let rec = people[0];
+                if (rec === undefined) {
+                    add_person();
+                }
+                else {
+                    let disp = "<span class=\"justlink\"><a class=\"asm-embed-name\" href=\"person?id=" + rec.ID + "\">" + rec.OWNERNAME + "</a></span>";
+                    disp += "<br/>" + rec.OWNERADDRESS + "<br/>" + rec.OWNERTOWN + "<br/>" + rec.OWNERCOUNTY + "<br/>" + rec.OWNERPOSTCODE + "<br/>" + rec.HOMETELEPHONE + "<br/>" + rec.WORKTELEPHONE + "<br/>" + rec.MOBILETELEPHONE + "<br/>" + rec.EMAILADDRESS;
+                    $(".similar-person").html(disp);
+                    similar_dialog();
+                }
             };
 
-            var check_org = function() {
+            const check_org = function() {
                 // If it's an organisation, only show the org fields,
                 // otherwise show individual
                 if ($("#ownertype").val() == 2) {
@@ -230,6 +218,8 @@ $(function() {
                 $(".towncounty").hide();
             }
 
+            $("#countryrow").toggle( !config.bool("HideCountry") );
+
             $("#gdprcontactoptinrow").toggle( config.bool("ShowGDPRContactOptIn") );
 
             if (config.bool("DisableAnimalControl")) {
@@ -247,8 +237,8 @@ $(function() {
             $("#county").autocomplete({ source: controller.counties.split("|") });
             $("#town").blur(function() {
                 if ($("#county").val() == "") {
-                    var tc = html.decode(controller.towncounties);
-                    var idx = tc.indexOf($("#town").val() + "^");
+                    let tc = html.decode(controller.towncounties);
+                    let idx = tc.indexOf($("#town").val() + "^");
                     if (idx != -1) {
                         $("#county").val(tc.substring(tc.indexOf("^^", idx) + 2, tc.indexOf("|", idx)));
                     }
@@ -278,7 +268,9 @@ $(function() {
         },
 
         reset: function() {
-            $(".asm-textbox, .asm-textarea, .asm-textareafixed").val("").change();
+            $(".newform").val("").change();
+            $("#country").val( config.str("OrganisationCountry") );
+            $("#jurisdiction").select("value", config.str("DefaultJurisdiction"));
             $(".asm-checkbox").prop("checked", false).change();
             $(".asm-personchooser").personchooser("clear");
             $("#flags option").prop("selected", false);

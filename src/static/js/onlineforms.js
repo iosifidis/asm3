@@ -1,12 +1,19 @@
-/*jslint browser: true, forin: true, eqeq: true, white: true, sloppy: true, vars: true, nomen: true */
 /*global $, jQuery, _, asm, common, config, controller, dlgfx, format, header, html, tableform, validate */
 
 $(function() {
 
-    var onlineforms = {
+    "use strict";
+
+    const onlineforms = {
+
+        email_submitter_options: [
+            { ID: 0, NAME: _("Do not send email") },
+            { ID: 1, NAME: _("Send and include a copy of the form submission") },
+            { ID: 2, NAME: _("Send confirmation message only") }
+        ],
 
         model: function() {
-            var dialog = {
+            const dialog = {
                 add_title: _("Add online form"),
                 edit_title: _("Edit online form"),
                 edit_perm: 'eof',
@@ -15,124 +22,132 @@ $(function() {
                 columns: 1,
                 width: 850,
                 fields: [
-                    { json_field: "NAME", post_field: "name", label: _("Name"), type: "text", validation: "notblank" },
+                    { json_field: "NAME", post_field: "name", label: _("Name"), type: "text", classes: "asm-doubletextbox", validation: "notblank" },
                     { json_field: "REDIRECTURLAFTERPOST", post_field: "redirect", label: _("Redirect to URL after POST"), 
                         type: "text", classes: "asm-doubletextbox", 
                         tooltip: _("After the user presses submit and ASM has accepted the form, redirect the user to this URL"),
                         callout: _("After the user presses submit and ASM has accepted the form, redirect the user to this URL") },
                     { json_field: "SETOWNERFLAGS", post_field: "flags", label: _("Person Flags"), type: "selectmulti" },
                     { json_field: "EMAILADDRESS", post_field: "email", label: _("Email submissions to"), type: "textarea", rows: "2", 
+                        validation: "validemail", 
                         tooltip: _("Email incoming form submissions to this comma separated list of email addresses"), 
                         callout: _("Email incoming form submissions to this comma separated list of email addresses") }, 
-                    { json_field: "EMAILSUBMITTER", post_field: "emailsubmitter", label: _("Send confirmation email to form submitter"), type: "check",
-                        tooltip: _("If this form has a populated emailaddress field during submission, send a confirmation email to it"),
-                        callout: _("If this form has a populated emailaddress field during submission, send a confirmation email to it") },
+                    { json_field: "EMAILSUBMITTER", post_field: "emailsubmitter", label: _("Send confirmation email to form submitter"), 
+                        type: "select", classes: "asm-doubleselectbox",
+                        callout: _("If this form has a populated emailaddress field during submission, send a confirmation email to it"),
+                        options: { displayfield: "NAME", valuefield: "ID", rows: onlineforms.email_submitter_options } },
                     { json_field: "EMAILMESSAGE", post_field: "emailmessage", label: _("Confirmation message"), type: "richtextarea", 
                         margintop: "0px", height: "100px", width: "600px",
-                        tooltip: _("The confirmation email message to send to the form submitter. Leave blank to send a copy of the completed form."),
-                        callout: _("The confirmation email message to send to the form submitter. Leave blank to send a copy of the completed form.") }, 
+                        tooltip: _("The confirmation email message to send to the form submitter."),
+                        callout: _("The confirmation email message to send to the form submitter.") }, 
                     { json_field: "DESCRIPTION", post_field: "description", label: _("Description"), type: "htmleditor", height: "100px", width: "600px" },
                     { json_field: "HEADER", post_field: "header", label: _("Header"), type: "htmleditor", height: "100px", width: "600px" },
                     { json_field: "FOOTER", post_field: "footer", label: _("Footer"), type: "htmleditor", height: "100px", width: "600px" }
                 ]
             };
 
-            var table = {
+            const table = {
                 rows: controller.rows,
                 idcolumn: "ID",
-                edit: function(row) {
-                    tableform.dialog_show_edit(dialog, row)
-                        .then(function() {
-                            tableform.fields_update_row(dialog.fields, row);
-                            return tableform.fields_post(dialog.fields, "mode=update&formid=" + row.ID, "onlineforms");
-                        })
-                        .then(function(response) {
-                            tableform.table_update(table);
-                            tableform.dialog_close();
-                        })
-                        .fail(function() {
-                            tableform.dialog_enable_buttons();
-                        });
+                edit: async function(row) {
+                    try {
+                        await tableform.dialog_show_edit(dialog, row);
+                        onlineforms.check_redirect_url();
+                        tableform.fields_update_row(dialog.fields, row);
+                        await tableform.fields_post(dialog.fields, "mode=update&formid=" + row.ID, "onlineforms");
+                        tableform.table_update(table);
+                        tableform.dialog_close();
+                    }
+                    catch(err) {
+                        log.error(err, err);
+                        tableform.dialog_enable_buttons();
+                    }
+                },
+                button_click: function() {
+                    if ($(this).attr("data-url")) {
+                        common.copy_to_clipboard($(this).attr("data-url"));
+                        header.show_info(_("Successfully copied to the clipboard."));
+                        return false;
+                    }
                 },
                 columns: [
                     { field: "NAME", display: _("Name"), initialsort: true, formatter: function(row) {
                         return "<span style=\"white-space: nowrap\">" + 
                             "<input type=\"checkbox\" data-id=\"" + row.ID + "\" title=\"" + html.title(_("Select")) + "\" />" +
-                            "<a href=\"onlineform?formid=" + row.ID + "\">" + row.NAME + "</a>" +
-                            "<a href=\"#\" class=\"link-edit\" data-id=\"" + row.ID + "\">" + html.icon("edit", _("Edit online form")) + "</a>" +
+                            "<a href=\"onlineform?formid=" + row.ID + "\">" + row.NAME + "</a> " +
+                            "<button class=\"link-edit\" data-icon=\"pencil\" data-id=\"" + row.ID + "\">" + _("Edit online form") + "</button>" +
                             "</span>";
                     }},
                     { field: "", display: _("Form URL"), formatter: function(row) {
-                            var u = "?";
+                            let u = asm.serviceurl + "?";
                             if (asm.useraccountalias) { u += "account=" + asm.useraccountalias + "&"; }
                             u += "method=online_form_html&formid=" + row.ID;
-                            return '<a target="_blank" href="' + asm.serviceurl + u + '">' + u + '</a>';
+                            return '<span style="white-space: nowrap">' + 
+                                '<a target="_blank" href="' + u + '">' + _("View Form") + '</a>' +
+                                ' <button data-icon="clipboard" data-text="false" data-url="' + u + '">' + 
+                                _("Copy form URL to the clipboard") + '</button></span>';
                         }},
                     { field: "REDIRECTURLAFTERPOST", display: _("Redirect to URL after POST") },
-                    { field: "EMAILADDRESS", display: _("Email submissions to") },
+                    { field: "EMAILADDRESS", display: _("Email submissions to"), formatter: function(row) {
+                        return common.replace_all(row.EMAILADDRESS, ",", "<br/>");
+                    }},
                     { field: "SETOWNERFLAGS", display: _("Person Flags"), formatter: function(row) { return row.SETOWNERFLAGS.split("|").join(", "); }},
                     { field: "NUMBEROFFIELDS", display: _("Number of fields") },
                     { field: "DESCRIPTION", display: _("Description"), formatter: function(row) { return html.truncate(row.DESCRIPTION); } }
                 ]
             };
 
-            var buttons = [
-                 { id: "new", text: _("New online form"), icon: "new", enabled: "always", 
-                     click: function() { 
-                         tableform.dialog_show_add(dialog)
-                             .then(function() {
-                                return tableform.fields_post(dialog.fields, "mode=create", "onlineforms");
-                             })
-                             .then(function(response) {
-                                 var row = {};
-                                 row.ID = response;
-                                 tableform.fields_update_row(dialog.fields, row);
-                                 controller.rows.push(row);
-                                 tableform.table_update(table);
-                                 tableform.dialog_close();
-                            })
-                            .fail(function() {
-                                 tableform.dialog_enable_buttons();
-                            });
-                     } 
-                 },
-                 { id: "clone", text: _("Clone"), icon: "copy", enabled: "multi", 
-                     click: function() { 
-                         tableform.buttons_default_state(buttons);
-                         var ids = tableform.table_ids(table);
-                         common.ajax_post("onlineforms", "mode=clone&ids=" + ids)
-                             .then(function() {
-                                 common.route_reload();
-                             });
-                     } 
-                 },
-                 { id: "delete", text: _("Delete"), icon: "delete", enabled: "multi", 
-                     click: function() { 
-                         tableform.delete_dialog()
-                             .then(function() {
-                                 tableform.buttons_default_state(buttons);
-                                 var ids = tableform.table_ids(table);
-                                 return common.ajax_post("onlineforms", "mode=delete&ids=" + ids);
-                             })
-                             .then(function() {
-                                 tableform.table_remove_selected_from_json(table, controller.rows);
-                                 tableform.table_update(table);
-                             });
-                     } 
-                 },
-                 { id: "headfoot", text: _("Edit Header/Footer"), icon: "forms", enabled: "always", tooltip: _("Edit online form HTML header/footer"),
-                     click: function() {
+            const buttons = [
+                { id: "new", text: _("New online form"), icon: "new", enabled: "always", perm: "aof", 
+                    click: async function() { 
+                        try {
+                            await tableform.dialog_show_add(dialog);
+                            onlineforms.check_redirect_url();
+                            let response = await tableform.fields_post(dialog.fields, "mode=create", "onlineforms");
+                            let row = {};
+                            row.ID = response;
+                            tableform.fields_update_row(dialog.fields, row);
+                            controller.rows.push(row);
+                            tableform.table_update(table);
+                            tableform.dialog_close();
+                        }
+                        catch(err) {
+                            log.error(err, err);
+                            tableform.dialog_enable_buttons();
+                        }
+                    } 
+                },
+                { id: "clone", text: _("Clone"), icon: "copy", enabled: "multi", perm: "aof",
+                    click: async function() { 
+                        tableform.buttons_default_state(buttons);
+                        let ids = tableform.table_ids(table);
+                        await common.ajax_post("onlineforms", "mode=clone&ids=" + ids);
+                        common.route_reload();
+                    } 
+                },
+                { id: "delete", text: _("Delete"), icon: "delete", enabled: "multi", perm: "dof", 
+                    click: async function() { 
+                        await tableform.delete_dialog();
+                        tableform.buttons_default_state(buttons);
+                        let ids = tableform.table_ids(table);
+                        await common.ajax_post("onlineforms", "mode=delete&ids=" + ids);
+                        tableform.table_remove_selected_from_json(table, controller.rows);
+                        tableform.table_update(table);
+                    } 
+                },
+                { id: "headfoot", text: _("Edit Header/Footer"), icon: "forms", enabled: "always", 
+                    tooltip: _("Edit online form HTML header/footer"), perm: "eof", 
+                    click: function() {
                         $("#dialog-headfoot").dialog("open");
-                     }
-                 },
-                 { id: "import", text: _("Import"), icon: "database", enabled: "always", tooltip: _("Import from file"),
-                     click: function() {
-                         tableform.show_okcancel_dialog("#dialog-import", _("Import"), { notblank: ["filechooser"] })
-                             .then(function() {
-                                 $("#importform").submit();
-                             });
-                     }
-                 }
+                    }
+                },
+                { id: "import", text: _("Import"), icon: "database", enabled: "always", 
+                    tooltip: _("Import from file"), perm: "aof", 
+                    click: async function() {
+                        await tableform.show_okcancel_dialog("#dialog-import", _("Import"), { notblank: ["filechooser"] });
+                        $("#importform").submit();
+                    }
+                }
             ];
             this.dialog = dialog;
             this.table = table;
@@ -140,33 +155,7 @@ $(function() {
         },
 
         load_person_flags: function() {
-            var field_option = function(post, label) {
-                return '<option value="' + post + '">' + label + '</option>\n';
-            };
-            var flag_option = function(flag) {
-                return '<option value="' + html.title(flag) + '">' + flag + '</option>';
-            };
-            var h = [
-                field_option("aco", _("ACO")),
-                field_option("banned", _("Banned")),
-                field_option("donor", _("Donor")),
-                field_option("driver", _("Driver")),
-                field_option("fosterer", _("Fosterer")),
-                field_option("homechecked", _("Homechecked")),
-                field_option("homechecker", _("Homechecker")),
-                field_option("member", _("Member")),
-                field_option("shelter", _("Other Shelter")),
-                field_option("retailer", _("Retailer")),
-                field_option("staff", _("Staff")),
-                asm.locale == "en_GB" ? field_option("giftaid", _("UK Giftaid")) : "",
-                field_option("vet", _("Vet")),
-                field_option("volunteer", _("Volunteer"))
-            ];
-            $.each(controller.flags, function(i, v) {
-                h.push(flag_option(v.FLAG));
-            });
-            $("#flags").html(h.join("\n"));
-            $("#flags").change();
+            html.person_flag_options(null, controller.flags, $("#flags"));
         },
 
         render_headfoot: function() {
@@ -174,7 +163,7 @@ $(function() {
                 '<div id="dialog-headfoot" style="display: none" title="' + html.title(_("Edit Header/Footer")) + '">',
                 '<div class="ui-state-highlight ui-corner-all">',
                     '<p>',
-                        '<span class="ui-icon ui-icon-info" style="float: left; margin-right: .3em;"></span>',
+                        '<span class="ui-icon ui-icon-info"></span>',
                         _("These are the HTML headers and footers used when displaying online forms."),
                     '</p>',
                 '</div>',
@@ -208,16 +197,16 @@ $(function() {
         },
 
         bind_headfoot: function() {
-            var headfootbuttons = {};
-            headfootbuttons[_("Save")] = function() {
-                var formdata = "mode=headfoot&" + $(".headfoot").toPOST();
-                common.ajax_post("onlineforms", formdata)
-                    .then(function() { 
-                        header.show_info(_("Updated."));
-                    })
-                    .always(function() {
-                        $("#dialog-headfoot").dialog("close");
-                    });
+            let headfootbuttons = {};
+            headfootbuttons[_("Save")] = async function() {
+                try {
+                    let formdata = "mode=headfoot&" + $(".headfoot").toPOST();
+                    await common.ajax_post("onlineforms", formdata);
+                    header.show_info(_("Updated."));
+                }
+                finally {
+                    $("#dialog-headfoot").dialog("close");
+                }
             };
             headfootbuttons[_("Cancel")] = function() { $(this).dialog("close"); };
             $("#dialog-headfoot").dialog({
@@ -236,8 +225,13 @@ $(function() {
             });
         },
 
+        check_redirect_url: function() {
+            let u = $("#redirect").val();
+            if (u && u.indexOf("http") != 0) { $("#redirect").val( "https://" + u ); }
+        },
+
         render: function() {
-            var s = "";
+            let s = "";
             this.model();
             s += this.render_headfoot();
             s += this.render_import();

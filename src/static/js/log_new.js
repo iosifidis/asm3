@@ -1,9 +1,10 @@
-/*jslint browser: true, forin: true, eqeq: true, white: true, sloppy: true, vars: true, nomen: true */
 /*global $, jQuery, _, asm, common, config, controller, dlgfx, format, header, html, validate */
 
 $(function() {
 
-    var log_new = {
+    "use strict";
+
+    const log_new = {
 
         render: function() {
             return [
@@ -47,7 +48,7 @@ $(function() {
         },
 
         bind: function() {
-            var validation = function() {
+            const validation = function() {
                 // Remove any previous errors
                 header.hide_error();
                 validate.reset();
@@ -68,7 +69,7 @@ $(function() {
                     }
                 }
                 // date
-                if ($.trim($("#logdate").val()) == "") {
+                if (common.trim($("#logdate").val()) == "") {
                     header.show_error(_("Log requires a date."));
                     validate.highlight("logdate");
                     return false;
@@ -83,21 +84,21 @@ $(function() {
             // Remove any retired lookups from the lists
             $(".asm-selectbox").select("removeRetiredOptions");
 
-            $("#log").button().click(function() {
+            $("#log").button().click(async function() {
                 if (!validation()) { return; }
                 $("#log").button("disable");
-                header.show_loading(_("Creating..."));
-                var formdata = $("input, select, textarea").toPOST() + "&mode=" + controller.mode;
-                common.ajax_post("log_new", formdata)
-                    .then(function() { 
-                        header.show_info(_("Log successfully added."));
-                        $("#logdate").datepicker("setDate", new Date());
-                        $("#entry").val("");
-                    })
-                    .always(function() {
-                        header.hide_loading();
-                        $("#log").button("enable");
-                    });
+                try {
+                    header.show_loading(_("Creating..."));
+                    let formdata = $("input, select, textarea").toPOST() + "&mode=" + controller.mode;
+                    await common.ajax_post("log_new", formdata);
+                    header.show_info(_("Log successfully added."));
+                    $("#logdate").datepicker("setDate", new Date());
+                    $("#entry").val("");
+                }
+                finally {
+                    header.hide_loading();
+                    $("#log").button("enable");
+                }
             });
         },
 

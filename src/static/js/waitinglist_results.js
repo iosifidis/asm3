@@ -1,9 +1,10 @@
-/*jslint browser: true, forin: true, eqeq: true, white: true, sloppy: true, vars: true, nomen: true */
-/*global $, jQuery, _, asm, common, config, controller, dlgfx, edit_header, format, header, html, tableform, validate */
+/*global $, jQuery, _, asm, additional, common, config, controller, dlgfx, edit_header, format, header, html, tableform, validate */
 
 $(function() {
 
-    var waitinglist_results = {
+    "use strict";
+
+    const waitinglist_results = {
 
         render: function() {
             return [
@@ -99,8 +100,8 @@ $(function() {
          * Renders the table.head tag with columns in the right order
          */
         render_tablehead: function() {
-            var labels = waitinglist_results.column_labels();
-            var s = [];
+            let labels = waitinglist_results.column_labels();
+            let s = [];
             s.push("<thead>");
             s.push("<tr>");
             $.each(labels, function(i, label) {
@@ -116,15 +117,15 @@ $(function() {
          * highlighting styling applied, etc.
          */
         render_tablebody: function() {
-            var h = [];
+            let h = [];
             $.each(controller.rows, function(i, row) {
                 h.push("<tr>");
                 $.each(waitinglist_results.column_names(), function(i, name) {
-                    var link = "<span style=\"white-space: nowrap\">";
+                    let link = "<span style=\"white-space: nowrap\">";
                     link += "<input type=\"checkbox\" class=\"asm-checkbox\" data=\"" + row.ID + "\" />";
                     link += "<a id=\"action-" + row.ID + "\" href=\"waitinglist?id=" + row.ID + "\">";
                     // Choose a cell style based on whether a highlight is selected or the urgency
-                    var tdclass = "";
+                    let tdclass = "";
                     if (row.HIGHLIGHT != "") {
                         tdclass = "asm-wl-highlight" + row.HIGHLIGHT;
                     }
@@ -134,11 +135,11 @@ $(function() {
                     else if (row.URGENCY == 2) { tdclass = "asm-wl-high"; }
                     else if (row.URGENCY == 1) { tdclass = "asm-wl-urgent"; }
                     h.push("<td class=\"" + tdclass + "\">");
-                    var value = "";
+                    let value = "";
                     if (row.hasOwnProperty(name.toUpperCase())) {
                         value = row[name.toUpperCase()];
                     }
-                    var formatted = waitinglist_results.format_column(row, name, value);
+                    let formatted = waitinglist_results.format_column(row, name, value, controller.additional);
                     if (name == "OwnerName") {
                         formatted = link + formatted + "</a></span>";
                     }
@@ -158,7 +159,7 @@ $(function() {
             });
 
             $("#table-waitinglist").on("change", "input", function() {
-                if ($("#table-waitinglist input:checked").size() > 0) {
+                if ($("#table-waitinglist input:checked").length > 0) {
                     $("#button-delete").button("option", "disabled", false); 
                     $("#button-complete").button("option", "disabled", false); 
                     $(".bhighlight").button("option", "disabled", false); 
@@ -178,32 +179,24 @@ $(function() {
                 common.route("waitinglist_new");
             });
 
-            $("#button-complete").button({disabled: true}).click(function() {
+            $("#button-complete").button({disabled: true}).click(async function() {
                 $("#button-complete").button("disable");
-                var formdata = "mode=complete&ids=" + $("#table-waitinglist input").tableCheckedData();
-                common.ajax_post("waitinglist_results", formdata)
-                    .then(function() { 
-                        common.route_reload(); 
-                    });
+                let formdata = "mode=complete&ids=" + $("#table-waitinglist input").tableCheckedData();
+                await common.ajax_post("waitinglist_results", formdata);
+                common.route_reload(); 
             });
 
-            $(".bhighlight").button({disabled: true}).click(function() {
-                var formdata = "mode=highlight&himode=" + $(this).attr("data") + "&ids=" + $("#table-waitinglist input").tableCheckedData();
-                common.ajax_post("waitinglist_results", formdata)
-                    .then(function() { 
-                        common.route_reload(); 
-                    });
+            $(".bhighlight").button({disabled: true}).click(async function() {
+                let formdata = "mode=highlight&himode=" + $(this).attr("data") + "&ids=" + $("#table-waitinglist input").tableCheckedData();
+                await common.ajax_post("waitinglist_results", formdata);
+                common.route_reload(); 
             });
 
-            $("#button-delete").button({disabled: true}).click(function() {
-                tableform.delete_dialog()
-                    .then(function() {
-                        var formdata = "mode=delete&ids=" + $("#table-waitinglist input").tableCheckedData();
-                        return common.ajax_post("waitinglist_results", formdata);
-                    })
-                    .then(function() { 
-                        common.route_reload(); 
-                    });
+            $("#button-delete").button({disabled: true}).click(async function() {
+                await tableform.delete_dialog();
+                let formdata = "mode=delete&ids=" + $("#table-waitinglist input").tableCheckedData();
+                await common.ajax_post("waitinglist_results", formdata);
+                common.route_reload(); 
             });
         },
 
@@ -231,9 +224,9 @@ $(function() {
          * Returns a list of our configured viewable column names
          */
         column_names: function() {
-            var cols = [];
+            let cols = [];
             $.each(config.str("WaitingListViewColumns").split(","), function(i, v) {
-                cols.push($.trim(v));
+                cols.push(common.trim(v));
             });
             return cols;
         },
@@ -242,10 +235,10 @@ $(function() {
          * Returns a list of our configured viewable column labels
          */
         column_labels: function() {
-            var names = waitinglist_results.column_names();
-            var labels = [];
+            let names = waitinglist_results.column_names();
+            let labels = [];
             $.each(names, function(i, name) {
-                labels.push(waitinglist_results.column_label(name));
+                labels.push(waitinglist_results.column_label(name, controller.additional));
             });
             return labels;
         },
@@ -258,10 +251,11 @@ $(function() {
         },
 
         /**
-         * Returns the i18n translated label for a column with name
+         * Returns the i18n translated label for a column with name.
+         * add - additional fields to scan for labels
          */
-        column_label: function(name) {
-            var labels = {
+        column_label: function(name, add) {
+            let labels = {
                 "CreatedBy": _("Created By"),
                 "Rank": _("Rank"),
                 "SpeciesID": _("Species"),
@@ -288,6 +282,10 @@ $(function() {
             if (labels.hasOwnProperty(name)) {
                 return labels[name];
             }
+            if (add) {
+                let addrow = common.get_row(add, name, "FIELDNAME");
+                if (addrow) { return addrow.FIELDLABEL; }
+            }
             return name;
         },
 
@@ -296,15 +294,16 @@ $(function() {
          * row: A row from the get_waitinglist query
          * name: The name of the column
          * value: The value of the row/column to format from the resultset
+         * add: The additional row results
          */
-        format_column: function(row, name, value) {
-            var DATE_FIELDS = [ "DatePutOnList", "DateRemovedFromList" ],
-            STRING_FIELDS = [ "CreatedBy", "OwnerName", "OwnerAddress", "OwnerTown", "OwnerCounty", 
-                "OwnerPostcode", "HomeTelephone", "WorkTelephone", "MobileTelephone", 
-                "EmailAddress", "AnimalDescription", "ReasonForWantingToPart", 
-                "ReasonForRemoval", "Comments", "Rank", "TimeOnList" ],
-            YES_NO_FIELDS = [ "CanAffordDonation" ],
-            rv = "";
+        format_column: function(row, name, value, add) {
+            const DATE_FIELDS = [ "DatePutOnList", "DateRemovedFromList" ],
+                STRING_FIELDS = [ "CreatedBy", "OwnerName", "OwnerAddress", "OwnerTown", "OwnerCounty", 
+                    "OwnerPostcode", "HomeTelephone", "WorkTelephone", "MobileTelephone", 
+                    "EmailAddress", "AnimalDescription", "ReasonForWantingToPart", 
+                    "ReasonForRemoval", "Comments", "Rank", "TimeOnList" ],
+                YES_NO_FIELDS = [ "CanAffordDonation" ];
+            let rv = "";
             if (name == "SpeciesID") {
                 rv = row.SPECIESNAME;
             }
@@ -323,6 +322,28 @@ $(function() {
             else if ($.inArray(name, YES_NO_FIELDS) > -1) {
                 if (value == 0) { rv = _("No"); }
                 if (value == 1) { rv = _("Yes"); }
+            }
+            else if (add) {
+                $.each(add, function(i, v) {
+                    if (v.LINKID == row.ID && v.FIELDNAME.toLowerCase() == name.toLowerCase()) {
+                        if (v.FIELDTYPE == additional.YESNO) { 
+                            rv = v.VALUE == "1" ? _("Yes") : _("No");
+                        }
+                        else if (v.FIELDTYPE == additional.MONEY) {
+                            rv = format.currency(v.VALUE);
+                        }
+                        else if (v.FIELDTYPE == additional.ANIMAL_LOOKUP) {
+                            rv = '<a href="animal?id=' + v.VALUE + '">' + v.ANIMALNAME + '</a>';
+                        }
+                        else if (v.FIELDTYPE == additional.PERSON_LOOKUP) {
+                            rv = html.person_link(v.VALUE, v.OWNERNAME);
+                        }
+                        else {
+                            rv = v.VALUE;
+                        }
+                        return false; // break
+                    }
+                });
             }
             return rv;
         },

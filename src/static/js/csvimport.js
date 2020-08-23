@@ -1,9 +1,10 @@
-/*jslint browser: true, forin: true, eqeq: true, white: true, sloppy: true, vars: true, nomen: true */
 /*global $, jQuery, _, asm, common, config, controller, dlgfx, format, header, html, tableform, validate */
 
 $(function() {
 
-    var csvimport = {
+    "use strict";
+
+    const csvimport = {
 
         render: function() {
             return [
@@ -14,10 +15,11 @@ $(function() {
                     _("Please see the manual for more information.")),
                 '<p>',
                 '<input id="cleartables" name="cleartables" type="checkbox" /> ',
-                '<label for="cleartables">' + _("Clear tables before importing") + '</label>',
+                '<label for="cleartables">' + _("Delete database before importing") + '</label>',
                 '</p>',
                 '<div id="cleartablesexplain" style="display: none">',
-                html.error(_("All existing data in your database will be REMOVED before importing the CSV file. This removal cannot be reversed.")),
+                html.error(_("All existing data and media in your database will be REMOVED before importing the CSV file.") + "<br/>" +
+                    _("This removal is permanent and cannot be reversed, are you absolutely sure you wish to do this?")),
                 '</div>',
                 '<p>',
                 '<input id="createmissinglookups" name="createmissinglookups" type="checkbox" /> ',
@@ -37,7 +39,7 @@ $(function() {
                 '<p>',
                 _("Text Encoding"),
                 '<select id="encoding" name="encoding">',
-                '<option value="utf8" selected="selected">UTF-8</option>',
+                '<option value="utf-8-sig" selected="selected">UTF-8</option>',
                 '<option value="utf16">UTF-16</option>',
                 '<option value="cp1252">cp1252 (Excel USA/Western Europe)</option>',
                 '</select>',
@@ -60,7 +62,7 @@ $(function() {
                 $("#import").button("disable");
                 $("#csvform").submit();
             });
-            var cme = function() {
+            const cme = function() {
                 if ($("#createmissinglookups").prop("checked")) {
                     $("#createmissinglookupsexplain").fadeIn();
                 }
@@ -68,7 +70,7 @@ $(function() {
                     $("#createmissinglookupsexplain").fadeOut();
                 }
             };
-            var cte = function() {
+            const cte = function() {
                 if ($("#cleartables").prop("checked")) {
                     $("#cleartablesexplain").fadeIn();
                 }
@@ -76,7 +78,7 @@ $(function() {
                     $("#cleartablesexplain").fadeOut();
                 }
             };
-            var cde = function() {
+            const cde = function() {
                 if ($("#checkduplicates").prop("checked")) {
                     $("#checkduplicatesexplain").fadeIn();
                 }

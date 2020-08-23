@@ -1,19 +1,33 @@
-/*jslint browser: true, forin: true, eqeq: true, white: true, sloppy: true, vars: true, nomen: true */
 /*global $, jQuery, _, asm, common, config, controller, dlgfx, format, header, html, tableform, validate */
 
 $(function() {
 
-    var csvexport = {
+    "use strict";
+
+    const csvexport = {
 
         render: function() {
             return [
                 html.content_header(_("Export Animals as CSV")),
                 '<div class="centered" style="max-width: 900px; margin-left: auto; margin-right: auto">',
-                '<form id="csvform" action="csvexport" method="post">',
+                '<form id="csvform" action="csvexport_animals" method="get">',
                 html.info(_("Export a CSV file of animal records that ASM can import into another database.") + '<br/>' +
                     _("Please see the manual for more information.")),
                 '<table>',
                 '<tr>',
+                '<td>',
+                '<label for="filter">' + _("Filter") + '</label>',
+                '</td>',
+                '<td>',
+                '<select id="filter" name="filter" class="asm-selectbox">',
+                '<option value="all">' + _("All Animals") + '</option>',
+                '<option value="shelter">' + _("All On-Shelter Animals") + '</option>',
+                '<option value="selshelter">' + _("Selected On-Shelter Animals") + '</option>',
+                '<option value="nonshelter">' + _("Non-Shelter Animals") + '</option>',
+                '</select>',
+                '</td>',
+                '</tr>',
+                '<tr id="animalsrow">',
                 '<td>',
                 '<label for="animals">' + _("Animals") + '</label>',
                 '</td>',
@@ -37,8 +51,17 @@ $(function() {
 
         bind: function() {
             $("#submit").button().click(function() {
-                if (!$("#animals").val()) { return; }
                 $("#csvform").submit();
+            });
+
+            $("#animalsrow").hide();
+            $("#filter").change(function() {
+                if ($("#filter").select("value") == "selshelter") { 
+                    $("#animalsrow").fadeIn(); 
+                }
+                else {
+                    $("#animalsrow").fadeOut(); 
+                }
             });
         },
 

@@ -1,9 +1,10 @@
-/*jslint browser: true, forin: true, eqeq: true, white: true, sloppy: true, vars: true, nomen: true */
 /*global $, jQuery, _, additional, asm, common, config, controller, dlgfx, format, header, html, validate */
 
 $(function() {
 
-    var animal_new = {
+    "use strict";
+
+    const animal_new = {
 
         /** Only attempt to set the non-shelter animal type once per reset */
         set_nonsheltertype_once: false,
@@ -252,6 +253,12 @@ $(function() {
                 html.list_to_options(controller.entryreasons, "ID", "REASONNAME"),
                 '</select></td>',
                 '</tr>',
+                '<tr id="jurisdictionrow">',
+                '<td><label for="jurisdiction">' + _("Jurisdiction") + '</label></td>',
+                '<td><select id="jurisdiction" data="jurisdiction" class="asm-selectbox">',
+                html.list_to_options(controller.jurisdictions, "ID", "JURISDICTIONNAME"),
+                '</select></td>',
+                '</tr>',
                 '<tr id="feerow">',
                 '<td><label for="fee">' + _("Adoption Fee") + '</label></td>',
                 '<td><input id="fee" data-json="FEE" data-post="fee" class="asm-currencybox asm-textbox" value="0" /></td>',
@@ -288,7 +295,7 @@ $(function() {
                 '<input id="timebroughtin" data="timebroughtin" class="asm-textbox asm-timebox" />',
                 '</td>',
                 '</tr>',
-                additional.additional_mandatory_fields(controller.additional),
+                additional.additional_new_fields(controller.additional),
                 '</table>',
                 '<div class="centered">',
                 '<button id="addedit">' + html.icon("animal-add") + ' ' + _("Create and edit") + '</button>',
@@ -303,29 +310,27 @@ $(function() {
          * Posts the animal details to the backend.
          * mode: "add" to stay on this screen after post, anything else to edit the created animal
          */
-        add_animal: function(mode) {
+        add_animal: async function(mode) {
 
             if (!animal_new.validation()) { return; }
 
             $(".asm-content button").button("disable");
             header.show_loading(_("Creating..."));
-            var formdata = "mode=save&" + $("input, textarea, select").not(".chooser").toPOST();
-            common.ajax_post("animal_new", formdata)
-                .then(function(data) { 
-                    var bits = data.split(" ");
-                    var createdID = bits[0];
-                    var newCode = bits[1];
-                    if (mode == "add") {
-                        header.show_info(_("Animal '{0}' created with code {1}").replace("{0}", $("#animalname").val()).replace("{1}", newCode));
-                    }
-                    else {
-                        if (createdID != "0") { common.route("animal?id=" + createdID); }
-                    }
-                })
-                .always(function() {
-                    $(".asm-content button").button("enable");
-                    header.hide_loading();
-                });
+            let formdata = "mode=save&" + $("input, textarea, select").not(".chooser").toPOST();
+            try {
+                const response = await common.ajax_post("animal_new", formdata);
+                const [createdID, newCode] = response.split(" ");
+                if (mode == "add") {
+                    header.show_info(_("Animal '{0}' created with code {1}").replace("{0}", $("#animalname").val()).replace("{1}", newCode));
+                }
+                else {
+                    if (createdID != "0") { common.route("animal?id=" + createdID); }
+                }
+            }
+            finally {
+                $(".asm-content button").button("enable");
+                header.hide_loading();
+            }
         },
 
         /**
@@ -345,14 +350,14 @@ $(function() {
             }
 
             // Not having any active litters disables join litter button
-            if ($("#sellitter option").size() == 0) {
+            if ($("#sellitter option").length == 0) {
                 $("#button-litterjoin").button("disable");
             }
 
             // If the user ticked hold, there's no hold until date and
             // we have an auto remove days period, default the date
             if ($("#hold").is(":checked") && $("#holduntil").val() == "" && config.integer("AutoRemoveHoldDays") > 0) {
-                var holddate = format.date_js(controller.animal.DATEBROUGHTIN).getTime();
+                let holddate = new Date().getTime();
                 holddate += config.integer("AutoRemoveHoldDays") * 86400000;
                 holddate = format.date( new Date(holddate) );
                 $("#holduntil").val(holddate);
@@ -384,6 +389,10 @@ $(function() {
                 if (config.bool("AddAnimalsShowLocationUnit")) { $("#locationunitrow").fadeIn(); }
             }
 
+            // Fields that apply to both shelter and non-shelter animals based on config
+            $("#jurisdictionrow").hide();
+            if (config.bool("AddAnimalsShowJurisdiction")) { $("#jurisdictionrow").show(); }
+
             // If transfer in is available and ticked, changed the broughtinby label
             if (config.bool("AddAnimalsShowTransferIn") && $("#transferin").is(":checked")) { 
                 $("label[for='broughtinby']").html(_("Transferred From")); 
@@ -410,7 +419,7 @@ $(function() {
                 }
             });
 
-            if($('#breed1 option').size() == 0) {
+            if($('#breed1 option').length == 0) {
                 $('#breed1').append("<option value='0'>"+$('#species option:selected').text()+"</option>");
             }
 
@@ -422,32 +431,29 @@ $(function() {
                     $(this).remove();
                 }
             });
-            if ($('#breed2 option').size() == 0) {
+            if ($('#breed2 option').length == 0) {
                 $('#breed2').append("<option value='0'>"+$('#species option:selected').text()+"</option>");
             }
         },
 
         // Update the units available for the selected location
-        update_units: function() {
-            var opts = ['<option value=""></option>'];
+        update_units: async function() {
+            let opts = ['<option value=""></option>'];
             $("#unit").empty();
-            common.ajax_post("animal_new", "mode=units&locationid=" + $("#internallocation").val())
-                .then(function(data) {
-                    $.each(html.decode(data).split("&&"), function(i, v) {
-                        var u = v.split("|");
-                        var unit = u[0], desc = u[1];
-                        if (!unit) { return false; }
-                        if (!desc) { desc = _("(available)"); }
-                        opts.push('<option value="' + html.title(unit) + '">' + unit +
-                            ' : ' + desc + '</option>');
-                    });
-                    $("#unit").html(opts.join("\n")).change();
-                });
+            const response = await common.ajax_post("animal_new", "mode=units&locationid=" + $("#internallocation").val());
+            $.each(html.decode(response).split("&&"), function(i, v) {
+                let [unit, desc] = v.split("|");
+                if (!unit) { return false; }
+                if (!desc) { desc = _("(available)"); }
+                opts.push('<option value="' + html.title(unit) + '">' + unit +
+                    ' : ' + desc + '</option>');
+            });
+            $("#unit").html(opts.join("\n")).change();
         },
 
         reset: function() {
 
-            $(".asm-textbox").val("").change();
+            $("#animalname, #dateofbirth, #weight, #weightlb").val("").change();
             $(".asm-checkbox").prop("checked", false).change();
             $(".asm-personchooser").personchooser("clear");
 
@@ -470,6 +476,7 @@ $(function() {
             $("#basecolour").select("value", config.str("AFDefaultColour"));
             $("#entryreason").select("value", config.str("AFDefaultEntryReason"));
             $("#internallocation").select("value", config.str("AFDefaultLocation"));
+            $("#jurisdiction").select("value", config.str("DefaultJurisdiction"));
             $("#size").select("value", config.str("AFDefaultSize"));
             $("#sex").select("value", "2"); // Unknown
 
@@ -486,6 +493,9 @@ $(function() {
                 $("#timebroughtin").val(format.time(new Date()));
             }
 
+            // Update units according to any location selected
+            animal_new.update_units();
+
             // Currency defaults
             $("#fee").currency("value", 0);
         },
@@ -497,7 +507,7 @@ $(function() {
 
             // code
             if (config.bool("ManualCodes")) {
-                if ($.trim($("#sheltercode").val()) == "") {
+                if (common.trim($("#sheltercode").val()) == "") {
                     header.show_error(_("Shelter code cannot be blank"));
                     validate.highlight("sheltercode");
                     return false;
@@ -505,14 +515,14 @@ $(function() {
             }
 
             // name
-            if ($.trim($("#animalname").val()) == "") {
+            if (common.trim($("#animalname").val()) == "") {
                 header.show_error(_("Name cannot be blank"));
                 validate.highlight("animalname");
                 return false;
             }
 
             // date of birth
-            if ($.trim($("#dateofbirth").val()) == "" && $.trim($("#estimatedage").val()) == "") {
+            if (common.trim($("#dateofbirth").val()) == "" && common.trim($("#estimatedage").val()) == "") {
                 header.show_error(_("Date of birth cannot be blank"));
                 validate.highlight("dateofbirth");
                 return false;
@@ -526,7 +536,7 @@ $(function() {
 
         bind: function() {
 
-            var similarbuttons = {};
+            let similarbuttons = {};
             similarbuttons[_("Close")] = function() { 
                 $(this).dialog("close");
             };
@@ -544,27 +554,25 @@ $(function() {
             // Check the name has not been used recently once the user leaves
             // the field.
             if (config.bool("WarnSimilarAnimalName")) {
-                $("#animalname").blur(function() {
-                    var formdata = "mode=recentnamecheck&animalname=" + encodeURIComponent($("#animalname").val());
-                    common.ajax_post("animal_new", formdata)
-                        .then(function(data) { 
-                            if (data == "None") {
-                                return;
-                            }
-                            var bits = data.split("|");
-                            var h = "<a class='asm-embed-name' href='animal?id=" + bits[0] + "'>" + bits[1] + " - " + bits[2] + "</a>";
-                            $(".similar-animal").html(h);
-                            $("#dialog-similar").dialog("open");
-                        })
-                        .always(function() {
-                            $(".asm-content button").button("enable");
-                        });
+                $("#animalname").blur(async function() {
+                    try {
+                        let formdata = "mode=recentnamecheck&animalname=" + encodeURIComponent($("#animalname").val());
+                        const response = await common.ajax_post("animal_new", formdata);
+                        if (response == "None") { return; }
+                        const [animalid, sheltercode, animalname] = response.split("|");
+                        let h = "<a class='asm-embed-name' href='animal?id=" + animalid + "'>" + sheltercode + " - " + animalname + "</a>";
+                        $(".similar-animal").html(h);
+                        $("#dialog-similar").dialog("open");
+                    }
+                    finally {
+                        $(".asm-content button").button("enable");
+                    }
                 });
             }
 
             // Converting between whole number for weight and pounds and ounces
-            var lboz_to_fraction = function() {
-                var lb = format.to_int($("#weightlb").val());
+            const lboz_to_fraction = function() {
+                let lb = format.to_int($("#weightlb").val());
                 lb += format.to_int($("#weightoz").val()) / 16.0;
                 $("#weight").val(String(lb));
             };
@@ -574,7 +582,13 @@ $(function() {
                 $("#poundsrow").show();
                 $("#weightlb, #weightoz").change(lboz_to_fraction);
             }
+            else if (config.bool("ShowWeightInLbsFraction")) {
+                $("#kglabel").html(_("lb"));
+                $("#kilosrow").show();
+                $("#poundsrow").hide();
+            }
             else {
+                $("#kglabel").html(_("kg"));
                 $("#kilosrow").show();
                 $("#poundsrow").hide();
             }
@@ -676,12 +690,10 @@ $(function() {
 
             $("#button-randomname")
                 .button({ icons: { primary: "ui-icon-tag" }, text: false })
-                .click(function() {
-                var formdata = "mode=randomname&sex=" + $("#sex").val();
-                common.ajax_post("animal", formdata)
-                    .then(function(result) { 
-                        $("#animalname").val(result); 
-                    });
+                .click(async function() {
+                let formdata = "mode=randomname&sex=" + $("#sex").val();
+                const response = await common.ajax_post("animal", formdata);
+                $("#animalname").val(response); 
             });
         },
 

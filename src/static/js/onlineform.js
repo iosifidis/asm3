@@ -1,32 +1,40 @@
-/*jslint browser: true, forin: true, eqeq: true, white: true, sloppy: true, vars: true, nomen: true */
 /*global $, jQuery, _, asm, common, config, controller, dlgfx, format, header, html, tableform, validate */
 
 $(function() {
 
-    var fieldtypes = [
+    "use strict";
+
+    const fieldtypes = [
         { "ID": 0, "NAME": _("Yes/No") },
         { "ID": 11, "NAME": _("Checkbox") },
         { "ID": 1, "NAME": _("Text") },
+        { "ID": 19, "NAME": _("Email") },
         { "ID": 10, "NAME": _("Date") },
         { "ID": 16, "NAME": _("Time") },
         { "ID": 2, "NAME": _("Notes") },
         { "ID": 3, "NAME": _("Lookup") },
         { "ID": 14, "NAME": _("Lookup (Multiple Select)") },
         { "ID": 12, "NAME": _("Radio Buttons") },
+        { "ID": 18, "NAME": _("Checkbox Group") },
         { "ID": 4, "NAME": _("Shelter Animal") },
         { "ID": 5, "NAME": _("Adoptable Animal") },
         { "ID": 6, "NAME": _("Color") },
         { "ID": 7, "NAME": _("Breed") },
         { "ID": 8, "NAME": _("Species") },
         { "ID": 9, "NAME": _("Raw Markup") },
+        { "ID": 17, "NAME": _("Image") },
         { "ID": 13, "NAME": _("Signature") },
         { "ID": 15, "NAME": _("GDPR Contact Opt-In") }
     ];
 
-    var onlineform = {
+    const onlineform = {
 
         model: function() {
-            var dialog = {
+            
+            let species = controller.species;
+            species.unshift( { "ID": -1, "SPECIESNAME": _("(all)") });
+
+            const dialog = {
                 add_title: _("Add form field"),
                 edit_title: _("Edit form field"),
                 edit_perm: 'eof',
@@ -37,32 +45,34 @@ $(function() {
                 fields: [
                     { json_field: "FIELDNAME", post_field: "fieldname", label: _("Name"), type: "text", validation: "notblank" }, 
                     { json_field: "FIELDTYPE", post_field: "fieldtype", label: _("Type"), type: "select", options: {
-                        valuefield: "ID", displayfield: "NAME", 
-                        rows: fieldtypes }},
-                    { json_field: "LABEL", post_field: "label", label: _("Label"), type: "text", validation: "notblank" }, 
+                        valuefield: "ID", displayfield: "NAME", rows: fieldtypes }},
+                    { json_field: "LABEL", post_field: "label", label: _("Label"), type: "text", maxlength: 1000, validation: "notblank" }, 
                     { json_field: "DISPLAYINDEX", post_field: "displayindex", label: _("Display Index"), type: "number" }, 
                     { json_field: "MANDATORY", post_field: "mandatory", label: _("Mandatory"), type: "check" },
+                    { json_field: "VISIBLEIF", post_field: "visibleif", label: _("Show If"), type: "text", maxlength: 1000,
+                        callout: _("Only show this field based on a conditional expression, eg: field1=dog") },
                     { json_field: "LOOKUPS", post_field: "lookups", label: _("Lookups"), type: "textarea" }, 
+                    { json_field: "SPECIESID", post_field: "species", label: _("Species"), type: "select", options: {
+                        valuefield: "ID", displayfield: "SPECIESNAME", rows: species } }, 
                     { json_field: "TOOLTIP", post_field: "tooltip", label: _("Tooltip"), type: "textarea" }
                 ]
             };
 
-            var table = {
+            const table = {
                 rows: controller.rows,
                 idcolumn: "ID",
-                edit: function(row) {
-                    tableform.dialog_show_edit(dialog, row, { onload: onlineform.check_lookups })
-                        .then(function() {
-                            tableform.fields_update_row(dialog.fields, row);
-                            return tableform.fields_post(dialog.fields, "mode=update&formfieldid=" + row.ID, "onlineform");
-                        })
-                        .then(function(response) {
-                            tableform.table_update(table);
-                            tableform.dialog_close();
-                        })
-                        .fail(function() {
-                            tableform.dialog_enable_buttons();
-                        });
+                edit: async function(row) {
+                    try {
+                        await tableform.dialog_show_edit(dialog, row, { onload: onlineform.check_controls });
+                        tableform.fields_update_row(dialog.fields, row);
+                        await tableform.fields_post(dialog.fields, "mode=update&formfieldid=" + row.ID, "onlineform");
+                        tableform.table_update(table);
+                        tableform.dialog_close();
+                    }
+                    catch(err) {
+                        log.error(err, err);
+                        tableform.dialog_enable_buttons();
+                    }
                 },
                 columns: [
                     { field: "FIELDNAME", display: _("Name") },
@@ -70,60 +80,63 @@ $(function() {
                     { field: "FIELDTYPE", display: _("Type"), formatter: function(row) {
                         return common.get_field(fieldtypes, row.FIELDTYPE, "NAME");
                     }},
-                    { field: "LABEL", display: _("Label") }
+                    { field: "LABEL", display: _("Label"), formatter: function(row) {
+                        return row.LABEL + " " + (row.MANDATORY == 1 ? '<span style="color: #f00">*</span>' : '');
+                    }},
+                    { field: "VISIBLEIF", display: _("Show If") }
                 ]
             };
 
-            var buttons = [
-                 { id: "new", text: _("New form field"), icon: "new", enabled: "always", 
-                     click: function() { 
-                         tableform.dialog_show_add(dialog, { onload: onlineform.check_lookups })
-                             .then(function() {
-                                return tableform.fields_post(dialog.fields, "mode=create&formid=" + controller.formid, "onlineform");
-                             })
-                             .then(function(response) {
-                                 var row = {};
-                                 row.ID = response;
-                                 tableform.fields_update_row(dialog.fields, row);
-                                 controller.rows.push(row);
-                                 tableform.table_update(table);
-                                 tableform.dialog_close();
-                             })
-                             .fail(function() {
-                                 tableform.dialog_enable_buttons();
-                             });
-                     } 
-                 },
-                 { id: "delete", text: _("Delete"), icon: "delete", enabled: "multi", 
-                     click: function() { 
-                         tableform.delete_dialog()
-                             .then(function() {
-                                 tableform.buttons_default_state(buttons);
-                                 var ids = tableform.table_ids(table);
-                                 return common.ajax_post("onlineform", "mode=delete&ids=" + ids);
-                             })
-                             .then(function() {
-                                 tableform.table_remove_selected_from_json(table, controller.rows);
-                                 tableform.table_update(table);
-                             });
-                     } 
-                 }
+            const buttons = [
+                { id: "new", text: _("New form field"), icon: "new", enabled: "always", perm: "eof", 
+                    click: async function() { 
+                        try {
+                            await tableform.dialog_show_add(dialog, { onload: onlineform.check_controls });
+                            let response = await tableform.fields_post(dialog.fields, "mode=create&formid=" + controller.formid, "onlineform");
+                            let row = {};
+                            row.ID = response;
+                            tableform.fields_update_row(dialog.fields, row);
+                            controller.rows.push(row);
+                            tableform.table_update(table);
+                            tableform.dialog_close();
+                        }
+                        catch(err) {
+                            log.error(err, err);
+                            tableform.dialog_enable_buttons();
+                        }
+                    } 
+                },
+                { id: "delete", text: _("Delete"), icon: "delete", enabled: "multi", perm: "eof", 
+                    click: async function() { 
+                        await tableform.delete_dialog();
+                        tableform.buttons_default_state(buttons);
+                        let ids = tableform.table_ids(table);
+                        await common.ajax_post("onlineform", "mode=delete&ids=" + ids);
+                        tableform.table_remove_selected_from_json(table, controller.rows);
+                        tableform.table_update(table);
+                    } 
+                }
             ];
             this.dialog = dialog;
             this.table = table;
             this.buttons = buttons;
         },
 
-        /** Check if we should show the lookups row (only
-          * valid if the field type is lookup)
+        /** Check which dialog controls should be shown
           */
-        check_lookups: function() {
-            var ft = $("#fieldtype").select("value");
-            if (ft == 3 || ft == 12 || ft == 14) {
+        check_controls: function() {
+            let ft = $("#fieldtype").select("value");
+            if (ft == 3 || ft == 12 || ft == 14 || ft == 18) {
                 $("#lookups").closest("tr").fadeIn();
             }
             else {
                 $("#lookups").closest("tr").fadeOut();
+            }
+            if (ft == 4 || ft == 5) {
+                $("#species").closest("tr").fadeIn();
+            }
+            else {
+                $("#species").closest("tr").fadeOut();
             }
             if (ft == 9) {
                 $("#tooltip").closest("tr").find("label").html(_("Markup"));
@@ -137,7 +150,7 @@ $(function() {
         },
 
         render: function() {
-            var s = "";
+            let s = "";
             this.model();
             s += tableform.dialog_render(this.dialog);
             s += html.content_header(_("Online Form: {0}").replace("{0}", controller.formname));
@@ -158,7 +171,7 @@ $(function() {
             });
 
             // Show/hide the lookup values box if type changes
-            $("#fieldtype").change(this.check_lookups);
+            $("#fieldtype").change(this.check_controls);
 
             // Prompt with our recognised fields in the autocomplete
             $("#fieldname").autocomplete({ source: controller.formfields }); 

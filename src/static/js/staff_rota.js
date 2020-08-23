@@ -1,12 +1,13 @@
-/*jslint browser: true, forin: true, eqeq: true, white: true, sloppy: true, vars: true, nomen: true */
 /*global $, jQuery, _, asm, common, config, controller, dlgfx, edit_header, format, header, html, tableform, validate */
 
 $(function() {
 
-    var staff_rota = {
+    "use strict";
+
+    const staff_rota = {
 
         model: function() {
-            var dialog = {
+            const dialog = {
                 add_title: _("Add rota item"),
                 edit_title: _("Edit rota item"),
                 edit_perm: 'coro',
@@ -61,18 +62,20 @@ $(function() {
 
             // Render the header - week number, followed by a column
             // for each day of the week.
-            var h = [ '<tr>' ],
+            let h = [ '<tr>' ],
                 css = "",
                 title = "",
                 i, 
                 d = format.date_js(controller.startdate),
-                year = d.getFullYear(),
-                thisweekno = format.date_weeknumber(d),
                 weekno = 1,
                 selattr = "",
-                w = format.first_iso_monday_of_year(d),
-                weekoptions = [];
-
+                weekoptions = [],
+                // We add 6 days when calling these two functions so that if
+                // d is in the last week of the year, we show the dropdown list
+                // for the next year instead of the one we are leaving.
+                w = format.first_iso_monday_of_year(common.add_days(d, 6)),
+                thisweekno = format.date_weeknumber(common.add_days(d, 6));
+            
             // Generate a list of options for every week of the year
             while (weekno <= 52) {
                 selattr = "";
@@ -112,7 +115,7 @@ $(function() {
                 }
                 // If there are some flags set in the filter box, make sure this person has them before
                 // rendering their row
-                if ($("#flags").val()) {
+                if ($("#flags").val().length > 0) {
                     if (!p.ADDITIONALFLAGS) { return; }
                     if (!common.array_overlap($("#flags").val(), p.ADDITIONALFLAGS.split("|"))) { return ; }
                 }
@@ -124,7 +127,7 @@ $(function() {
                     h.push('<td data-person="' + p.ID + '" data-date="' + format.date(d) + '" class="asm-staff-rota-cell">');
                     $.each(controller.rows, function(ir, r) {
                         if (r.OWNERID == p.ID && format.date_in_range(d, r.STARTDATETIME, r.ENDDATETIME, true)) {
-                            var period = format.time(r.STARTDATETIME, "%H:%M") + ' - ' + format.time(r.ENDDATETIME, "%H:%M");
+                            let period = format.time(r.STARTDATETIME, "%H:%M") + ' - ' + format.time(r.ENDDATETIME, "%H:%M");
                             if (r.ROTATYPEID < 10) {
                                 if (r.ROTATYPEID == 1) { css = 'asm-staff-rota-shift'; }
                                 if (r.ROTATYPEID == 2) { css = 'asm-staff-rota-overtime'; }
@@ -146,7 +149,7 @@ $(function() {
         },
 
         get_flags_param: function() {
-            var flags = $("#flags").val();
+            let flags = $("#flags").val();
             if (!flags) { flags = []; }
             return encodeURIComponent(flags.join("|"));
         },
@@ -170,12 +173,12 @@ $(function() {
 
         bind: function() {
 
-            var dialog = this.dialog;
+            let dialog = this.dialog;
             tableform.dialog_bind(dialog);
 
             $(".asm-staff-rota").on("click", "a", function(e) {
-                var id = $(this).attr("data-id");
-                var row = common.get_row(controller.rows, id, "ID");
+                let id = $(this).attr("data-id");
+                let row = common.get_row(controller.rows, id, "ID");
                 tableform.dialog_show_edit(dialog, row, { onload: function() { staff_rota.type_change(); }} )
                     .then(function() {
                         tableform.fields_update_row(dialog.fields, row);
@@ -204,23 +207,21 @@ $(function() {
             });
 
             $(".asm-staff-rota").on("click", "td", function(e) {
-                var personid = $(this).attr("data-person");
-                var date = $(this).attr("data-date");
+                let personid = $(this).attr("data-person");
+                let date = $(this).attr("data-date");
                 if (!personid && !date) { return; }
                 tableform.dialog_show_add(dialog, {
-                    onadd: function() {
-                        tableform.fields_post(dialog.fields, "mode=create", controller.name)
-                            .then(function(response) {
-                                var row = {};
-                                row.ID = response;
-                                tableform.fields_update_row(dialog.fields, row);
-                                row.OWNERNAME = $("#person").personchooser("get_selected").OWNERNAME;
-                                row.ROTATYPENAME = common.get_field(controller.rotatypes, row.ROTATYPEID, "ROTATYPE");
-                                row.WORKTYPENAME = common.get_field(controller.worktypes, row.WORKTYPEID, "WORKTYPE");
-                                controller.rows.push(row);
-                                staff_rota.generate_table();
-                                tableform.dialog_close();
-                            });
+                    onadd: async function() {
+                        let response = await tableform.fields_post(dialog.fields, "mode=create", controller.name);
+                        let row = {};
+                        row.ID = response;
+                        tableform.fields_update_row(dialog.fields, row);
+                        row.OWNERNAME = $("#person").personchooser("get_selected").OWNERNAME;
+                        row.ROTATYPENAME = common.get_field(controller.rotatypes, row.ROTATYPEID, "ROTATYPE");
+                        row.WORKTYPENAME = common.get_field(controller.worktypes, row.WORKTYPEID, "WORKTYPE");
+                        controller.rows.push(row);
+                        staff_rota.generate_table();
+                        tableform.dialog_close();
                     },
                     onload: function() {
                         $("#startdate").val(date);
@@ -245,7 +246,7 @@ $(function() {
             $("#button-clone").button().click(function() {
                 tableform.show_okcancel_dialog("#dialog-clone", _("Clone"), { width: 500, notblank: [ "newdate" ] })
                     .then(function() {
-                         var newdate = encodeURIComponent($("#newdate").val()),
+                         let newdate = encodeURIComponent($("#newdate").val()),
                              flags = staff_rota.get_flags_param(); 
                          return common.ajax_post(controller.name, "mode=clone" +
                              "&startdate=" + format.date(staff_rota.days[0]) + 
@@ -261,15 +262,11 @@ $(function() {
                     });
             });
 
-            $("#button-delete").button().click(function() {
-                var startdate = format.date(staff_rota.days[0]);
-                tableform.delete_dialog(null, _("This will remove ALL rota entries for the week beginning {0}. This action is irreversible, are you sure?").replace("{0}", startdate))
-                    .then(function() {
-                        return common.ajax_post(controller.name, "mode=deleteweek&startdate=" + startdate);
-                    })
-                    .then(function() {
-                        common.route(controller.name + "?flags=" + staff_rota.get_flags_param() + "&start=" + startdate);
-                    });
+            $("#button-delete").button().click(async function() {
+                let startdate = format.date(staff_rota.days[0]);
+                await tableform.delete_dialog(null, _("This will remove ALL rota entries for the week beginning {0}. This action is irreversible, are you sure?").replace("{0}", startdate));
+                await common.ajax_post(controller.name, "mode=deleteweek&startdate=" + startdate);
+                common.route(controller.name + "?flags=" + staff_rota.get_flags_param() + "&start=" + startdate);
             });
 
             $("#button-prev").button().click(function() {
@@ -294,14 +291,14 @@ $(function() {
 
         sync: function() {
             // Load the full set of flags into the select
-            html.person_flag_options(null, controller.flags, $("#flags"), false);
+            html.person_flag_options(null, controller.flags, $("#flags"));
             // Now remove irrelevant built in flags (staff/volunteer are a given,
             // banned, donor, deceased and homechecked don't make sense)
             $.each([ "banned", "deceased", "donor", "homechecked" ], function(i, v) {
                 $("#flags option[value='" + v + "']").remove();
             });
             $("#flags").change();
-            // Mark set any that were passed during page load
+            // Mark set any flags that were passed from the backend as params to the page
             if (controller.flagsel) {
                 $.each(controller.flagsel.split("|"), function(i, v) {
                     $("#flags option[value='" + v + "']").prop("selected", true); 

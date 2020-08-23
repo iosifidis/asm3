@@ -1,9 +1,10 @@
-/*jslint browser: true, forin: true, eqeq: true, white: true, sloppy: true, vars: true, nomen: true */
 /*global $, jQuery, _, asm, additional, common, config, controller, dlgfx, edit_header, format, header, html, tableform, validate */
 
 $(function() {
 
-    var waitinglist = {
+    "use strict";
+
+    const waitinglist = {
 
         current_person: null,
 
@@ -116,19 +117,12 @@ $(function() {
                 '</tr>',
                 '<tr>',
                 '<td><label for="autoremovepolicy">' + _("Automatically remove") + '</label>',
+                '<span id="callout-hiddencomments" class="asm-callout">' +
+                _("ASM will remove this animal from the waiting list after a set number of weeks since the last owner contact date.") + ' <br />' +
+                _("Set this to 0 to never automatically remove.") + '</span>',
+                '</td>',
                 '<td><input type="text" id="autoremovepolicy" data-json="AUTOREMOVEPOLICY" data-post="autoremovepolicy" class="asm-textbox asm-numberbox" />',
                 ' ' + _("weeks after last contact.") + '</td>',
-                '</tr>',
-                '<tr>',
-                '<td></td>',
-                '<td>',
-                '<div class="ui-state-highlight ui-corner-all" style="margin-top: 20px; padding: 0 .7em">',
-                '<p><span class="ui-icon ui-icon-info" style="float: left; margin-right: .3em;"></span>',
-                _("ASM will remove this animal from the waiting list after a set number of weeks since the last owner contact date.") + ' <br />',
-                _("Set this to 0 to never automatically remove."),
-                '</p>',
-                '</div>',
-                '</td>',
                 '</tr>',
                 '<tr>',
                 '<td><label for="dateremoved">' + _("Date removed") + '</label></td>',
@@ -155,8 +149,8 @@ $(function() {
         enable_widgets: function() {
             // Hide additional accordion section if there aren't
             // any additional fields declared
-            var ac = $("#asm-additional-accordion");
-            var an = ac.next();
+            let ac = $("#asm-additional-accordion");
+            let an = ac.next();
             if (an.find(".additional").length == 0) {
                 ac.hide(); an.hide();
             }
@@ -174,7 +168,7 @@ $(function() {
             validate.reset();
 
             // owner
-            if ($.trim($("#owner").val()) == "0") {
+            if (common.trim($("#owner").val()) == "0") {
                 header.show_error(_("Waiting list entries must have a contact"));
                 $("#asm-details-accordion").accordion("option", "active", 0);
                 validate.highlight("owner");
@@ -182,7 +176,7 @@ $(function() {
             }
 
             // date put on list
-            if ($.trim($("#dateputon").val()) == "") {
+            if (common.trim($("#dateputon").val()) == "") {
                 header.show_error(_("Date put on cannot be blank"));
                 $("#asm-details-accordion").accordion("option", "active", 3);
                 validate.highlight("dateputon");
@@ -190,7 +184,7 @@ $(function() {
             }
 
             // description
-            if ($.trim($("#description").val()) == "") {
+            if (common.trim($("#description").val()) == "") {
                 header.show_error(_("Description cannot be blank"));
                 $("#asm-details-accordion").accordion("option", "active", 0);
                 validate.highlight("description");
@@ -218,7 +212,7 @@ $(function() {
             validate.save = function(callback) {
                 if (!waitinglist.validation()) { header.hide_loading(); return; }
                 validate.dirty(false);
-                var formdata = "mode=save" +
+                let formdata = "mode=save" +
                     "&id=" + $("#waitinglistid").val() + 
                     "&recordversion=" + controller.animal.RECORDVERSION + 
                     "&" + $("input, select, textarea").toPOST();
@@ -254,28 +248,24 @@ $(function() {
                     formdata: "mode=email&wlid=" + $("#waitinglistid").val(),
                     name: waitinglist.current_person.OWNERFORENAMES + " " + waitinglist.current_person.OWNERSURNAME,
                     email: waitinglist.current_person.EMAILADDRESS,
-                    logtypes: controller.logtypes
+                    logtypes: controller.logtypes,
+                    personid: controller.animal.OWNERID,
+                    templates: controller.templates
                 });
             });
 
-            $("#button-toanimal").button().click(function() {
+            $("#button-toanimal").button().click(async function() {
                 $("#button-toanimal").button("disable");
-                var formdata = "mode=toanimal&id=" + $("#waitinglistid").val();
-                common.ajax_post("waitinglist", formdata)
-                    .then(function(result) { 
-                        common.route("animal?id=" + result); 
-                    });
+                let formdata = "mode=toanimal&id=" + $("#waitinglistid").val();
+                let result = await common.ajax_post("waitinglist", formdata);
+                common.route("animal?id=" + result); 
             });
 
-            $("#button-delete").button().click(function() {
-                tableform.delete_dialog(null, _("This will permanently remove this waiting list entry, are you sure?"))
-                    .then(function() {
-                        var formdata = "mode=delete&id=" + $("#waitinglistid").val();
-                        return common.ajax_post("waitinglist", formdata);
-                    })
-                    .then(function() { 
-                        common.route("main");
-                    });
+            $("#button-delete").button().click(async function() {
+                await tableform.delete_dialog(null, _("This will permanently remove this waiting list entry, are you sure?"));
+                let formdata = "mode=delete&id=" + $("#waitinglistid").val();
+                await common.ajax_post("waitinglist", formdata);
+                common.route("main");
             });
 
             additional.relocate_fields();

@@ -1,4 +1,3 @@
-#!/usr/bin/python env
 
 import os, sys, datetime, time
 
@@ -8,7 +7,7 @@ sys.path.append(PATH + "../src")
 
 DB_PATH = "/home/robin/tmp/asmunittest.db"
 
-import db
+import asm3.db
 
 def reset_db():
     try:
@@ -17,7 +16,7 @@ def reset_db():
         pass
 
 def get_dbo():
-    dbo = db.get_database("SQLITE")
+    dbo = asm3.db.get_dbo("SQLITE")
     dbo.database = DB_PATH
     dbo.installpath = "%s/../src/" % PATH
     return dbo

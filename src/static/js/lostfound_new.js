@@ -1,25 +1,25 @@
-/*jslint browser: true, forin: true, eqeq: true, white: true, sloppy: true, vars: true, nomen: true */
 /*global $, jQuery, _, additional, asm, common, config, controller, dlgfx, format, header, html, validate */
 
 $(function() {
 
-    var lostfound_new = {
+    "use strict";
+
+    const lostfound_new = {
 
         render: function() {
-            var mode = controller.name.indexOf("lost") != -1 ? "lost" : "found";
-            this.mode = mode;
+            this.mode = controller.name.indexOf("lost") != -1 ? "lost" : "found";
             return [
-                mode == "lost" ? html.content_header(_("Add lost animal")) : html.content_header(_("Add found animal")),
+                this.mode == "lost" ? html.content_header(_("Add lost animal")) : html.content_header(_("Add found animal")),
                 '<table class="asm-table-layout">',
                 '<tr>',
                 '<td width="40%">',
                 '<table width="100%">',
                 '<tr>',
                 '<td>',
-                mode == "lost" ? '<label for="datelost">' + _("Date Lost") + '</label></td>' : "",
-                mode == "lost" ? '<td><input type="text" id="datelost" data="datelost" class="asm-textbox asm-datebox" title="' + html.title(_("The date this animal was lost")) + '"  />' : "",
-                mode == "found" ? '<label for="datefound">' + _("Date Found") + '</label></td>' : "",
-                mode == "found" ? '<td><input type="text" id="datefound" data="datefound" class="asm-textbox asm-datebox" title="' + html.title(_("The date this animal was found")) + '"  />' : "",
+                this.mode == "lost" ? '<label for="datelost">' + _("Date Lost") + '</label></td>' : "",
+                this.mode == "lost" ? '<td><input type="text" id="datelost" data="datelost" class="asm-textbox asm-datebox" title="' + html.title(_("The date this animal was lost")) + '"  />' : "",
+                this.mode == "found" ? '<label for="datefound">' + _("Date Found") + '</label></td>' : "",
+                this.mode == "found" ? '<td><input type="text" id="datefound" data="datefound" class="asm-textbox asm-datebox" title="' + html.title(_("The date this animal was found")) + '"  />' : "",
                 '</td>',
                 '</tr>',
                 '<tr>',
@@ -84,16 +84,21 @@ $(function() {
                 '<table width="100%">',
                 '<tr>',
                 '<td>',
-                mode == "lost" ? '<label for="arealost">' + _("Area Lost") + '</label></td>' : "",
-                mode == "lost" ? '<td><textarea id="arealost" data="arealost" rows="4" class="asm-textarea" title="' + html.title(_("Area where the animal was lost")) + '"></textarea></td>' : "",
-                mode == "found" ? '<label for="areafound">' + _("Area Found") + '</label></td>' : "",
-                mode == "found" ? '<td><textarea id="areafound" data="areafound" rows="4" class="asm-textarea" title="' + html.title(_("Area where the animal was found")) + '"></textarea></td>' : "",
+                this.mode == "lost" ? '<label for="arealost">' + _("Area Lost") + '</label></td>' : "",
+                this.mode == "lost" ? '<td><textarea id="arealost" data="arealost" rows="4" class="asm-textarea" title="' + html.title(_("Area where the animal was lost")) + '"></textarea></td>' : "",
+                this.mode == "found" ? '<label for="areafound">' + _("Area Found") + '</label></td>' : "",
+                this.mode == "found" ? '<td><textarea id="areafound" data="areafound" rows="4" class="asm-textarea" title="' + html.title(_("Area where the animal was found")) + '"></textarea></td>' : "",
                 '</td>',
                 '</tr>',
                 '<tr>',
                 '<td><label for="areapostcode">' + _("Zipcode") + '</label></td>',
                 '<td><input id="areapostcode" data="areapostcode" type="text" class="asm-textbox" /></td>',
                 '</tr>',
+                '<tr>',
+                '<td><label for="microchip">' + _("Microchip") + '</label></td>',
+                '<td><input id="microchip" data="microchip" type="text" class="asm-textbox" /></td>',
+                '</tr>',
+                '<tr>',
                 '<tr>',
                 '<td>',
                 '<label for="comments">' + _("Comments") + '</label></td>',
@@ -107,7 +112,7 @@ $(function() {
                 '<input id="owner" data="owner" type="hidden" class="asm-personchooser" value="" />',
                 '</td>',
                 '</tr>',
-                additional.additional_mandatory_fields(controller.additional),
+                additional.additional_new_fields(controller.additional),
                 '</table>',
                 '</td>',
                 '</tr>',
@@ -131,14 +136,14 @@ $(function() {
                     $(this).remove();
                 }
             });
-            if($('#breed option').size() == 0) {
+            if($('#breed option').length == 0) {
                 $('#breed').append("<option value='1'>"+$('#species option:selected').text()+"</option>");
             }
         },
 
         bind: function() {
 
-            var validation = function() {
+            const validation = function() {
                 // Remove any previous errors
                 header.hide_error();
                 validate.reset();
@@ -151,21 +156,21 @@ $(function() {
                 }
 
                 // date lost
-                if (lostfound_new.mode == "lost" && $.trim($("#datelost").val()) == "") {
+                if (lostfound_new.mode == "lost" && common.trim($("#datelost").val()) == "") {
                     header.show_error(_("Date lost cannot be blank."));
                     validate.highlight("datelost");
                     return false;
                 }
 
                 // date found
-                if (lostfound_new.mode == "found" && $.trim($("#datefound").val()) == "") {
+                if (lostfound_new.mode == "found" && common.trim($("#datefound").val()) == "") {
                     header.show_error(_("Date found cannot be blank."));
                     validate.highlight("datefound");
                     return false;
                 }
 
                 // date reported
-                if ($.trim($("#datereported").val()) == "") {
+                if (common.trim($("#datereported").val()) == "") {
                     header.show_error(_("Date reported cannot be blank."));
                     validate.highlight("datereported");
                     return false;
@@ -178,45 +183,44 @@ $(function() {
 
             };
 
-            var addLFAnimal = function(addmode) {
+            const add_lf_animal = async function(addmode) {
                 if (!validation()) { return; }
 
                 $(".asm-content button").button("disable");
                 header.show_loading(_("Creating..."));
-
-                var formdata = $("input, textarea, select").not(".chooser").toPOST();
-                common.ajax_post(controller.name, formdata)
-                    .then(function(createdID) { 
-                        if (addmode == "add") {
-                            if (lostfound_new.mode == "lost") {
-                                header.show_info(_("Lost animal entry {0} successfully created.").replace("{0}", format.padleft(createdID, 6)));
-                            }
-                            else {
-                                header.show_info(_("FoundLost animal entry {0} successfully created.").replace("{0}", format.padleft(createdID, 6)));
-                            }
+                try {
+                    let formdata = $("input, textarea, select").not(".chooser").toPOST();
+                    let createdID = await common.ajax_post(controller.name, formdata);
+                    if (addmode == "add") {
+                        if (lostfound_new.mode == "lost") {
+                            header.show_info(_("Lost animal entry {0} successfully created.").replace("{0}", format.padleft(createdID, 6)));
                         }
                         else {
-                            if (lostfound_new.mode == "lost") {
-                                if (createdID != "0") { common.route("lostanimal?id=" + createdID); }
-                            }
-                            else {
-                                if (createdID != "0") { common.route("foundanimal?id=" + createdID); }
-                            }
+                            header.show_info(_("FoundLost animal entry {0} successfully created.").replace("{0}", format.padleft(createdID, 6)));
                         }
-                    })
-                    .always(function() {
-                        $(".asm-content button").button("enable");
-                        header.hide_loading();
-                    });
+                    }
+                    else {
+                        if (lostfound_new.mode == "lost") {
+                            if (createdID != "0") { common.route("lostanimal?id=" + createdID); }
+                        }
+                        else {
+                            if (createdID != "0") { common.route("foundanimal?id=" + createdID); }
+                        }
+                    }
+                }
+                finally {
+                    $(".asm-content button").button("enable");
+                    header.hide_loading();
+                }
             };
 
             // Buttons
             $("#add").button().click(function() {
-                addLFAnimal("add");
+                add_lf_animal("add");
             });
 
             $("#addedit").button().click(function() {
-                addLFAnimal("addedit");
+                add_lf_animal("addedit");
             });
 
             $("#reset").button().click(function() {
@@ -233,7 +237,7 @@ $(function() {
         },  
 
         reset: function() {
-            $(".asm-textbox, .asm-textarea").val("").change();
+            $("#dispatchaddress, #dispatchtown, #dispatchcounty, #dispatchpostcode").val("").change();
             $(".asm-checkbox").prop("checked", false).change();
             $(".asm-personchooser").personchooser("clear");
             // Set select box default values

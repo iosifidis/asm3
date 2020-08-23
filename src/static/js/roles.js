@@ -1,17 +1,18 @@
-/*jslint browser: true, forin: true, eqeq: true, white: true, sloppy: true, vars: true, nomen: true */
 /*global $, jQuery, _, asm, common, config, controller, dlgfx, format, header, html, tableform, validate */
 
 $(function() {
 
-    var roles = {
+    "use strict";
+
+    const roles = {
 
         render: function() {
-            var cl = function(s) { return "<p class='asm-header'>" + s + "</p>"; };
-            var cr = function(token, s) { return "<input id='" + token + "' type='checkbox' class='token' /> <label for='" + token + "'>" + s + "</label><br />"; };
-            var h = [
+            const cl = function(s) { return "<p class='asm-header'>" + s + "</p>"; };
+            const cr = function(token, s) { return "<input id='" + token + "' type='checkbox' class='token' /> <label for='" + token + "'>" + s + "</label><br />"; };
+            let h = [
                 '<div id="dialog-add" style="display: none" title="' + html.title(_("Add role")) + '">',
                 '<div class="ui-state-highlight ui-corner-all" style="margin-top: 20px; padding: 0 .7em">',
-                '<p><span class="ui-icon ui-icon-info" style="float: left; margin-right: .3em;"></span>',
+                '<p><span class="ui-icon ui-icon-info"></span>',
                 _("Roles need a name."),
                 '</p>',
                 '</div>',
@@ -34,6 +35,7 @@ $(function() {
                 cr("va", _("View Animals")),
                 cr("da", _("Delete Animals")),
                 cr("cloa", _("Clone Animals")),
+                cr("ma", _("Merge Animals")),
                 cr("gaf", _("Generate Documents")),
                 cl(_("Litters")),
                 cr("all", _("Add Litter")),
@@ -82,7 +84,10 @@ $(function() {
                 cr("vrd", _("View Document Repository")),
                 cr("drd", _("Delete Document from Repository")),
                 cl(_("Online Forms")),
-                cr("eof", _("Edit Online Forms")),
+                cr("aof", _("Add Online Forms")),
+                cr("vof", _("View Online Forms")),
+                cr("eof", _("Change Online Forms")),
+                cr("dof", _("Delete Online Forms")),
                 cr("vif", _("View Incoming Forms")),
                 cr("dif", _("Delete Incoming Forms")),
                 '</p>',
@@ -181,6 +186,7 @@ $(function() {
                 cl(_("Rota")),
                 cr("aoro", _("Add Rota")),
                 cr("voro", _("View Rota")),
+                cr("vsro", _("View Staff Rota")),
                 cr("coro", _("Change Rota")),
                 cr("doro", _("Delete Rota")),
                 cl(_("Stock Control")),
@@ -194,7 +200,7 @@ $(function() {
                 cr("vcov", _("Change Vouchers")),
                 cr("vdov", _("Delete Vouchers")),
                 cl(_("System")),
-                cr("asm", _("Access System Menu")),
+                cr("asm", _("Access Settings Menu")),
                 cr("cso", _("Change System Options")),
                 cr("cpo", _("Change Publishing Options")),
                 cr("maf", _("Modify Additional Fields")),
@@ -260,13 +266,13 @@ $(function() {
             $("#table-roles").table();
 
             $("#table-roles input").change(function() {
-                if ($("#table-roles input:checked").size() > 0) {
+                if ($("#table-roles input:checked").length > 0) {
                     $("#button-delete").button("option", "disabled", false); 
                 }
                 else {
                     $("#button-delete").button("option", "disabled", true); 
                 }
-                if ($("#table-roles input:checked").size() == 1) {
+                if ($("#table-roles input:checked").length == 1) {
                     $("#button-clone").button("option", "disabled", false);
                 }
                 else {
@@ -274,47 +280,47 @@ $(function() {
                 }
             });
 
-            var addbuttons = { };
-            addbuttons[_("Create")] = function() {
+            let addbuttons = { };
+            addbuttons[_("Create")] = async function() {
                 validate.reset("dialog-add");
                 if (!validate.notblank([ "rolename" ])) { return; }
-                var securitymap = "";
+                let securitymap = "";
                 $(".token").each(function() {
                     if ($(this).is(":checked")) { securitymap += $(this).attr("id") + " *"; }
                 });
-                var formdata = "mode=create&securitymap=" + securitymap + "&" + $("#dialog-add input").toPOST();
+                let formdata = "mode=create&securitymap=" + securitymap + "&" + $("#dialog-add input").toPOST();
                 $("#dialog-add").disable_dialog_buttons();
-                common.ajax_post("roles", formdata)
-                    .then(function() { 
-                        common.route_reload(); 
-                    })
-                    .always(function() {
-                        $("#dialog-add").dialog("close"); 
-                    });
+                try {
+                    await common.ajax_post("roles", formdata);
+                    common.route_reload(); 
+                }
+                finally {
+                    $("#dialog-add").dialog("close"); 
+                }
             };
             addbuttons[_("Cancel")] = function() {
                 $("#dialog-add").dialog("close");
             };
 
-            var editbuttons = { };
-            editbuttons[_("Save")] = function() {
+            let editbuttons = { };
+            editbuttons[_("Save")] = async function() {
                 validate.reset("dialog-add");
                 if (!validate.notblank([ "rolename" ])) { return; }
-                var securitymap = "";
+                let securitymap = "";
                 $(".token").each(function() {
                     if ($(this).is(":checked")) { securitymap += $(this).attr("id") + " *"; }
                 });
-                var formdata = "mode=update&roleid=" + $("#roleid").val() + "&" + 
+                let formdata = "mode=update&roleid=" + $("#roleid").val() + "&" + 
                     "securitymap=" + securitymap + "&" +
                     $("#dialog-add input").toPOST();
                 $("#dialog-add").disable_dialog_buttons();
-                common.ajax_post("roles", formdata)
-                    .then(function() { 
-                        common.route_reload(); 
-                    })
-                    .always(function() { 
-                        $("#dialog-add").dialog("close"); 
-                    });
+                try {
+                    await common.ajax_post("roles", formdata);
+                    common.route_reload(); 
+                }
+                finally {
+                    $("#dialog-add").dialog("close"); 
+                }
             };
             editbuttons[_("Cancel")] = function() {
                 $("#dialog-add").dialog("close");
@@ -334,25 +340,25 @@ $(function() {
             $("#button-new").button().click(function() {
                validate.reset("dialog-add");
                $("#dialog-add .asm-textbox").val("");
-               $("#dialog-add input:checkbox").attr("checked", false);
+               $("#dialog-add input:checkbox").prop("checked", false);
                $("#dialog-add").dialog("option", "buttons", addbuttons);
                $("#dialog-add").dialog("option", "title", _("Add role"));
                $("#dialog-add").dialog("open"); 
             });
 
             $("#button-clone").button({disabled: true}).click(function() {
-                var rid = "";
+                let rid = "";
                 $("#table-roles :checked").each(function() {
                     rid = $(this).attr("data");
                 });
                 $("#dialog-add .asm-textbox").val("");
-                var rrow = "#rolerow-" + rid + " ";
-                var rolename = $(rrow + ".role-name").val();
-                var perms = $(rrow + ".role-map").val().replace(/\*/g, "").split(" ");
+                let rrow = "#rolerow-" + rid + " ";
+                let rolename = $(rrow + ".role-name").val();
+                let perms = $(rrow + ".role-map").val().replace(/\*/g, "").split(" ");
                 $("#rolename").val(_("Copy of {0}").replace("{0}", rolename));
-                $(".token").attr("checked", false);
+                $(".token").prop("checked", false);
                 $.each(perms, function(i, v) {
-                    $("#" + v).prop("checked", true);
+                    if (v) { $("#" + v).prop("checked", true); }
                 });
                 validate.reset("dialog-add");
                 $("#dialog-add").dialog("option", "buttons", addbuttons);
@@ -360,35 +366,31 @@ $(function() {
                 $("#dialog-add").dialog("open"); 
             });
 
-            $("#button-delete").button({disabled: true}).click(function() {
-                tableform.delete_dialog(null, _("This will permanently remove the selected roles, are you sure?"))
-                    .then(function() {
-                        var formdata = "mode=delete&ids=";
-                        $("#table-roles input").each(function() {
-                            if ($(this).attr("type") == "checkbox") {
-                                if ($(this).is(":checked")) {
-                                    formdata += $(this).attr("data") + ",";
-                                }
-                            }
-                        });
-                        return common.ajax_post("roles", formdata);
-                    })
-                    .then(function() { 
-                        common.route_reload(); 
-                    });
+            $("#button-delete").button({disabled: true}).click(async function() {
+                await tableform.delete_dialog(null, _("This will permanently remove the selected roles, are you sure?"));
+                let formdata = "mode=delete&ids=";
+                $("#table-roles input").each(function() {
+                    if ($(this).attr("type") == "checkbox") {
+                        if ($(this).is(":checked")) {
+                            formdata += $(this).attr("data") + ",";
+                        }
+                    }
+                });
+                await common.ajax_post("roles", formdata);
+                common.route_reload(); 
             });
 
             $(".role-edit-link")
             .click(function() {
-                var rid = $(this).attr("data");
-                var rrow = "#rolerow-" + rid + " ";
+                let rid = $(this).attr("data");
+                let rrow = "#rolerow-" + rid + " ";
                 validate.reset("dialog-add");
                 $("#roleid").val($(this).attr("data"));
                 $("#rolename").val($(rrow + ".role-name").val());
-                var perms = $(rrow + ".role-map").val().replace(/\*/g, "").split(" ");
-                $(".token").attr("checked", false);
+                let perms = $(rrow + ".role-map").val().replace(/\*/g, "").split(" ");
+                $(".token").prop("checked", false);
                 $.each(perms, function(i, v) {
-                    $("#" + v).prop("checked", true);
+                    if (v) { $("#" + v).prop("checked", true); }
                 });
                 $("#dialog-add").dialog("option", "buttons", editbuttons);
                 $("#dialog-add").dialog("option", "title", _("Edit role"));

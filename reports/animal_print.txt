@@ -2,7 +2,7 @@ Print Animal Record
 ###
 Auditing
 ###
-34018/Any
+34111/Any
 ###
 A complete printout of an animal record.
 ###
@@ -173,6 +173,9 @@ $$BODY
 <h2>Log</h2>
 {SUBREPORT.SUBREPORT_AnimalPrintLog.ANIMALID}
 
+<h2>Media</h2>
+{SUBREPORT.SUBREPORT_AnimalPrintMedia.ANIMALID}
+
 <h2>Additional</h2>
 {SUBREPORT.SUBREPORT_AnimalPrintAdditional.ANIMALID}
 
@@ -189,7 +192,7 @@ animalvaccination.DateRequired,
 animalvaccination.DateOfVaccination,
 animalvaccination.DateExpires,
 animalvaccination.Comments AS VaccComments,
-CASE WHEN vo.OwnerName Is Not Null THEN vo.OwnerName ELSE animalvaccination.LastChangedBy END AS GivenBy
+CASE WHEN vo.OwnerName Is Not Null THEN vo.OwnerName ELSE animalvaccination.GivenBy END AS GivenBy
 FROM animalvaccination
 INNER JOIN vaccinationtype ON vaccinationtype.ID = animalvaccination.VaccinationID
 LEFT OUTER JOIN owner vo ON vo.ID = animalvaccination.AdministeringVetID
@@ -214,13 +217,15 @@ a.ShelterCode, a.AnimalName,
 t.AnimalType, s.SpeciesName,
 il.LocationName, am.TreatmentName,
 am.Dosage, amt.TreatmentNumber, amt.TotalTreatments,
-am.Cost, amt.DateRequired, amt.DateGiven, am.Comments AS RegimeComments, amt.Comments
+am.Cost, amt.DateRequired, amt.DateGiven, am.Comments AS RegimeComments, amt.Comments,
+CASE WHEN mo.OwnerName Is Not Null THEN mo.OwnerName ELSE amt.GivenBy END AS GivenBy
 FROM animal a
 INNER JOIN animaltype t ON t.ID = a.AnimalTypeID
 INNER JOIN species s ON s.ID = a.SpeciesID
 INNER JOIN internallocation il ON il.ID = a.ShelterLocation
 INNER JOIN animalmedical am ON a.ID = am.AnimalID
 INNER JOIN animalmedicaltreatment amt ON amt.AnimalMedicalID = am.ID
+LEFT OUTER JOIN owner mo ON mo.ID = amt.AdministeringVetID
 WHERE a.ID = $PARENTKEY$
 ORDER BY amt.DateRequired
 +++
@@ -233,6 +238,7 @@ $$HEADER
 <td><b>Number</b></td>
 <td><b>Required</b></td>
 <td><b>Given</b></td>
+<td><b>By</b></td>
 <td><b>Regimen Comments</b></td>
 <td><b>Comments</b></td>
 </tr>
@@ -245,6 +251,7 @@ $$BODY<tr>
 <td>$TREATMENTNUMBER / $TOTALTREATMENTS</td>
 <td>$DATEREQUIRED</td>
 <td>$DATEGIVEN</td>
+<td>$GIVENBY</td>
 <td>$REGIMECOMMENTS</td>
 <td>$COMMENTS</td>
 </tr>
@@ -415,9 +422,11 @@ SUBREPORT_AnimalPrintMovement
 +++
 SELECT ad.*, mt.MovementType,
 o.OwnerName, o.OwnerAddress, o.OwnerTown, o.OwnerCounty, o.OwnerPostcode, o.HomeTelephone, o.MobileTelephone, o.EmailAddress,
-rb.OwnerName AS ReturnedBy
+rb.OwnerName AS ReturnedBy, 
+CASE WHEN ad.ReturnDate Is Not Null AND ad.MovementType IN (1,5) THEN er.ReasonName ELSE '' END AS ReturnedReasonName 
 FROM adoption ad
 INNER JOIN lksmovementtype mt ON mt.ID = ad.MovementType
+LEFT OUTER JOIN entryreason er ON er.ID = ad.ReturnedReasonID
 LEFT OUTER JOIN owner o ON o.ID = ad.OwnerID
 LEFT OUTER JOIN owner rb ON rb.ID = ad.ReturnedByOwnerID 
 WHERE ad.AnimalID = $PARENTKEY$
@@ -429,7 +438,7 @@ $$HEADER
 HEADER$$
 $$BODY
 <tr><td>$ADOPTIONNUMBER</td><td><b>$OWNERNAME</b><br />$OWNERADDRESS</br />$OWNERTOWN $OWNERCOUNTY $OWNERPOSTCODE<br />H: $HOMETELEPHONE<br />M: $MOBILETELEPHONE<br />$EMAILADDRESS</td>
-<td>$RESERVATIONDATE</td><td>$RESERVATIONCANCELLEDDATE</td><td>$MOVEMENTDATE</td><td>$MOVEMENTTYPE</td><td>$RETURNDATE $RETURNEDBY</td><td>$REASONFORRETURN</td><td>$COMMENTS</td></tr>
+<td>$RESERVATIONDATE</td><td>$RESERVATIONCANCELLEDDATE</td><td>$MOVEMENTDATE</td><td>$MOVEMENTTYPE</td><td>$RETURNDATE $RETURNEDBY</td><td>$RETURNEDREASONNAME $REASONFORRETURN</td><td>$COMMENTS</td></tr>
 BODY$$
 $$FOOTER
 </table>
@@ -448,6 +457,35 @@ $$HEADER
 HEADER$$
 $$BODY
 <tr><td>$DATE</td><td>$LOGTYPENAME</td><td>$COMMENTS</td></tr>
+BODY$$
+$$FOOTER
+</table>
+FOOTER$$
++++
+SUBREPORT_AnimalPrintMedia
++++
+SELECT
+m.LinkID AS RecordID, 
+m.ID AS MediaID,
+m.Date,
+m.MediaName,
+m.MediaNotes
+FROM media m
+WHERE m.LinkID = $PARENTKEY$ AND m.LinkTypeID = 0
+ORDER BY m.Date
++++
+$$HEADER
+<table border="1">
+<tr>
+<th>Date</th>
+<th>Link</th>
+</tr>
+HEADER$$
+$$BODY
+<tr>
+<td>$DATE</td>
+<td><a target="_blank" href="media?id=$MEDIAID">$MEDIANOTES</a></td>
+</tr>
 BODY$$
 $$FOOTER
 </table>

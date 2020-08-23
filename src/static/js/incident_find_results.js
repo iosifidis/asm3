@@ -1,16 +1,17 @@
-/*jslint browser: true, forin: true, eqeq: true, white: true, sloppy: true, vars: true, nomen: true */
 /*global $, jQuery, _, asm, common, config, controller, dlgfx, format, header, html, validate */
 
 $(function() {
 
-    var incident_find_results = {
+    "use strict";
+
+    const incident_find_results = {
 
         render: function() {
             return [
                 html.content_header(_("Results")),
                 '<div id="asm-results">',
                 '<div class="ui-state-highlight ui-corner-all" style="margin-top: 5px; padding: 0 .7em">',
-                '<p><span class="ui-icon ui-icon-search" style="float: left; margin-right: .3em;"></span>',
+                '<p><span class="ui-icon ui-icon-search"></span>',
                 _("Find animal control incidents returned {0} results.").replace("{0}", controller.rows.length),
                 '</p>',
                 '</div>',
@@ -44,7 +45,7 @@ $(function() {
         },
 
         render_results: function() {
-            var h = [];
+            let h = [];
             $.each(controller.rows, function(i, r) {
                 h.push('<tr>');
                 h.push('<td><a href="incident?id=' + r.ID + '">' + r.INCIDENTNAME + '</a></td>');

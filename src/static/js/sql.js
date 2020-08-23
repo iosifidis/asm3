@@ -1,9 +1,10 @@
-/*jslint browser: true, forin: true, eqeq: true, white: true, sloppy: true, vars: true, nomen: true */
 /*global $, jQuery, _, asm, common, config, controller, dlgfx, format, header, html, tableform, validate */
 
 $(function() {
 
-    var sql = {
+    "use strict";
+
+    const sql = {
 
         editor: null, 
 
@@ -31,6 +32,7 @@ $(function() {
                         // ASM2_COMPATIBILITY
                         "animalcsv|" + _("CSV of animal/adopter data"), 
                         "medicalcsv|" + _("CSV of animal/medical data"), 
+                        "mediacsv|" + _("CSV of media data"), 
                         "personcsv|" + _("CSV of person data"),
                         "incidentcsv|" + _("CSV of incident data"),
                         "licencecsv|" + _("CSV of license data"),
@@ -41,7 +43,7 @@ $(function() {
                     ]}
                 ], true),
                 '</div>',
-                '<textarea id="sql" class="asm-sqleditor" data-height="150px" data="sql" rows="10"></textarea>',
+                '<textarea id="sql" class="asm-sqleditor" data-width="100%" data-height="150px" data="sql" rows="10"></textarea>',
                 '<hr />',
                 '<table id="sql-results"></table>',
                 html.content_footer()
@@ -66,7 +68,7 @@ $(function() {
 
         bind_scriptdialog: function() {
 
-            var b = { };
+            let b = { };
             b[_("Execute Script")] = function() {
                 if (!validate.notblank([ "sqlfile" ])) { return; }
                 $("#sqlfileform").submit();
@@ -90,7 +92,7 @@ $(function() {
             
             this.bind_scriptdialog();
 
-            var dbuttons = {};
+            let dbuttons = {};
             dbuttons[_("Yes")] = function() {
                 $(this).dialog("close");
                 common.route("sql_dump?ajax=false&mode=" + sql.dumpchoice);
@@ -99,7 +101,7 @@ $(function() {
                 $(this).dialog("close");
             };
 
-            var confirm_dump = function(action) {
+            const confirm_dump = function(action) {
                 sql.dumpchoice = action;
                 $("#dialog-dump").dialog({ 
                     autoOpen: true,
@@ -118,32 +120,32 @@ $(function() {
                 return false;
             });
 
-            $("#button-exec").button().click(function() {
-                var formdata = "mode=exec&" + $("#sql").toPOST();
+            $("#button-exec").button().click(async function() {
+                let formdata = "mode=exec&" + $("#sql").toPOST();
                 $("#button-exec").button("disable");
                 header.show_loading(_("Executing..."));
-                common.ajax_post("sql", formdata)
-                    .then(function(result) { 
-                        if (result.indexOf("<thead") == 0) {
-                            $("#sql-results").html(result);
-                            $("#sql-results").table();
-                            $("#sql-results").fadeIn();
-                            var norecs = String($("#sql-results tr").length - 1);
-                            header.show_info(_("{0} results.").replace("{0}", norecs));
+                try {
+                    let result = await common.ajax_post("sql", formdata);
+                    if (result.indexOf("<thead") == 0) {
+                        $("#sql-results").html(result);
+                        $("#sql-results").table();
+                        $("#sql-results").fadeIn();
+                        let norecs = String($("#sql-results tr").length - 2);
+                        header.show_info(_("{0} results.").replace("{0}", norecs));
+                    }
+                    else {
+                        $("#sql-results").fadeOut();
+                        if (result != "") {
+                            header.show_info(result);
                         }
                         else {
-                            $("#sql-results").fadeOut();
-                            if (result != "") {
-                                header.show_info(result);
-                            }
-                            else {
-                                header.show_info(_("No results."));
-                            }
+                            header.show_info(_("No results."));
                         }
-                    })
-                    .always(function() {
-                        $("#button-exec").button("enable");
-                    });
+                    }
+                }
+                finally {
+                    $("#button-exec").button("enable");
+                }
             });
 
             $("#button-script").button().click(function() {

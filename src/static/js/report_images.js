@@ -1,12 +1,13 @@
-/*jslint browser: true, forin: true, eqeq: true, white: true, sloppy: true, vars: true, nomen: true */
 /*global $, jQuery, _, asm, common, config, controller, dlgfx, format, header, html, tableform, validate */
 
 $(function() {
 
-    var report_images = {
+    "use strict";
+
+    const report_images = {
 
         model: function() {
-            var dialog = {
+            const dialog = {
                 add_title: _("Extra images"),
                 close_on_ok: true,
                 html_form_action: "report_images",
@@ -14,61 +15,68 @@ $(function() {
                 columns: 1,
                 width: 550,
                 fields: [
-                    { post_field: "filechooser", label: _("Image file"), type: "file", validation: "notblank" }
+                    { post_field: "filechooser", label: _("Image file"), type: "file", validation: "notblank" },
+                    { type: "raw", label: "", markup: '<input type="hidden" name="mode" value="create" />' }
                 ]
             };
 
-            var table = {
+            const table = {
                 rows: controller.rows,
                 idcolumn: "NAME",
                 edit: function(row) {
                     common.route("image?db=" + asm.useraccount + "&mode=dbfs&id=/reports/" + row.NAME);
                 },
+                button_click: function() {
+                    common.copy_to_clipboard($(this).attr("data"));
+                    header.show_info(_("Successfully copied to the clipboard."));
+                    return false;
+                },
                 columns: [
                     { field: "NAME", display: _("Image file"), initialsort: true },
                     { field: "NAME", display: _("URL"), 
                         formatter: function(row) {
-                            return "image?db=" + asm.useraccount + "&mode=dbfs&id=/reports/" + row.NAME;
+                            let relurl = "image?db=" + asm.useraccount + "&mode=dbfs&id=/reports/" + row.NAME,
+                                absurl = asm.serviceurl + "?";
+                            if (asm.useraccountalias) { absurl += "account=" + asm.useraccountalias + "&"; }
+                            absurl += "method=extra_image&title=" + row.NAME;
+                            return relurl + ' <button type="button" data-icon="link" data="' + relurl + '">' + 
+                                _("Copy relative URL to the clipboard (for use with documents and reports)") + '</button>' +
+                                ' <button type="button" data-icon="extlink" data="' + absurl + '">' + 
+                                _("Copy absolute service URL to the clipboard (for external use in web pages and emails)") + '</button>';
                         }
                     }
                 ]
             };
 
-            var buttons = [
-                 { id: "new", text: _("New"), icon: "new", enabled: "always", 
-                     click: function() { 
-                         tableform.dialog_show_add(dialog)
-                             .then(function() {
-                                 var fn = $("#filechooser").val().toLowerCase();
-                                 validate.reset();
-                                 if (fn.indexOf(".jpg") == -1 && fn.indexOf(".png") == -1 && fn.indexOf(".gif") == -1) {
-                                     header.show_error(_("The selected file is not an image."));
-                                     validate.highlight("filechooser");
-                                     return;
-                                 }
-                                 $("#form-tableform").submit();
-                            });
-                     } 
-                 },
-                 { id: "delete", text: _("Delete"), icon: "delete", enabled: "multi", 
-                     click: function() { 
-                         tableform.delete_dialog()
-                             .then(function() {
-                                 tableform.buttons_default_state(buttons);
-                                 var ids = tableform.table_ids(table);
-                                 return common.ajax_post("report_images", "mode=delete&ids=" + ids);
-                             })
-                             .then(function() {
-                                 common.route_reload();
-                             });
-                     } 
-                 },
-                 { id: "rename", text: _("Rename"), icon: "link", enabled: "one", 
-                     click: function() { 
-                         $("#newname").val(tableform.table_ids(table).split(",")[0]);
-                         $("#dialog-rename").dialog("open");
-                     } 
-                 }
+            const buttons = [
+                { id: "new", text: _("New"), icon: "new", enabled: "always", 
+                    click: async function() { 
+                        await tableform.dialog_show_add(dialog);
+                        let fn = $("#filechooser").val().toLowerCase();
+                        validate.reset();
+                        if (fn.indexOf(".jpg") == -1 && fn.indexOf(".png") == -1 && fn.indexOf(".gif") == -1) {
+                            header.show_error(_("The selected file is not an image."));
+                            validate.highlight("filechooser");
+                            return;
+                        }
+                        $("#form-tableform").submit();
+                    } 
+                },
+                { id: "delete", text: _("Delete"), icon: "delete", enabled: "multi", 
+                    click: async function() { 
+                        await tableform.delete_dialog();
+                        tableform.buttons_default_state(buttons);
+                        let ids = tableform.table_ids(table);
+                        await common.ajax_post("report_images", "mode=delete&ids=" + ids);
+                        common.route_reload();
+                    } 
+                },
+                { id: "rename", text: _("Rename"), icon: "link", enabled: "one", 
+                    click: function() { 
+                        $("#newname").val(tableform.table_ids(table).split(",")[0]);
+                        $("#dialog-rename").dialog("open");
+                    } 
+                }
 
             ];
             this.dialog = dialog;
@@ -90,17 +98,15 @@ $(function() {
         },
 
         bind_rename_dialog: function() {
-            var renamebuttons = { }, table = report_images.table;
-            renamebuttons[_("Rename")] = function() {
+            let renamebuttons = { }, table = report_images.table;
+            renamebuttons[_("Rename")] = async function() {
                 validate.reset("dialog-rename");
                 if (!validate.notblank([ "newname" ])) { return; }
                 $("#dialog-rename").disable_dialog_buttons();
-                var oldname = tableform.table_ids(table).split(",")[0];
-                var newname = encodeURIComponent($("#newname").val());
-                common.ajax_post("report_images", "mode=rename&newname=" + newname + "&oldname=" + oldname)
-                    .then(function() {
-                        common.route_reload();
-                    });
+                let oldname = tableform.table_ids(table).split(",")[0];
+                let newname = encodeURIComponent($("#newname").val());
+                await common.ajax_post("report_images", "mode=rename&newname=" + newname + "&oldname=" + oldname);
+                common.route_reload();
             };
             renamebuttons[_("Cancel")] = function() {
                 $("#dialog-rename").dialog("close");
@@ -118,7 +124,7 @@ $(function() {
 
 
         render: function() {
-            var s = "";
+            let s = "";
             this.model();
             s += this.render_rename_dialog();
             s += tableform.dialog_render(this.dialog);
@@ -139,7 +145,8 @@ $(function() {
         },
 
         destroy: function() {
-            $("#dialog-rename").dialog("destroy");
+            common.widget_destroy("#dialog-rename");
+            tableform.dialog_destroy();
         },
 
 

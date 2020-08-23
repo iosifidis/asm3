@@ -1,9 +1,10 @@
-/*jslint browser: true, forin: true, eqeq: true, white: true, sloppy: true, vars: true, nomen: true */
 /*global $, jQuery, _, additional, asm, common, config, controller, dlgfx, format, header, html, validate */
 
 $(function() {
 
-    var waitinglist_new = {
+    "use strict";
+
+    const waitinglist_new = {
 
         render: function() {
             return [
@@ -43,7 +44,7 @@ $(function() {
                 '<tr>',
                 '<td>',
                 '<label for="reasonforwantingtopart">' + _("Entry reason") + '</label></td>',
-                '<td><textarea id="reasonforwaitingtopart" data="reasonforwantingtopart" rows="5" class="asm-textareafixed" title="' + html.title(_("The reason the owner wants to part with the animal")) + '"></textarea></td>',
+                '<td><textarea id="reasonforwantingtopart" data="reasonforwantingtopart" rows="5" class="asm-textareafixed" title="' + html.title(_("The reason the owner wants to part with the animal")) + '"></textarea></td>',
                 '</td>',
                 '</tr>',
                 '</table>',
@@ -73,7 +74,7 @@ $(function() {
                 '<input id="owner" data="owner" type="hidden" class="asm-personchooser" value="" />',
                 '</td>',
                 '</tr>',
-                additional.additional_mandatory_fields(controller.additional),
+                additional.additional_new_fields(controller.additional),
                 '</table>',
                 '</td>',
                 '</tr>',
@@ -88,27 +89,27 @@ $(function() {
         },
 
         bind: function() {
-            var validation = function() {
+            const validation = function() {
                 // Remove any previous errors
                 header.hide_error();
                 validate.reset();
 
                 // owner
-                if ($.trim($("#owner").val()) == "") {
+                if (common.trim($("#owner").val()) == "") {
                     header.show_error(_("Waiting list entries must have a contact"));
                     validate.highlight("owner");
                     return false;
                 }
 
                 // date put on list
-                if ($.trim($("#dateputon").val()) == "") {
+                if (common.trim($("#dateputon").val()) == "") {
                     header.show_error(_("Date put on cannot be blank"));
                     validate.highlight("dateputon");
                     return false;
                 }
 
                 // description
-                if ($.trim($("#description").val()) == "") {
+                if (common.trim($("#description").val()) == "") {
                     header.show_error(_("Description cannot be blank"));
                     validate.highlight("description");
                     return false;
@@ -121,34 +122,34 @@ $(function() {
 
             };
 
-            var addWaitingList = function(mode) {
+            const add_waiting_list = async function(mode) {
                 if (!validation()) { return; }
 
                 $(".asm-content button").button("disable");
                 header.show_loading(_("Creating..."));
 
-                var formdata = $("input, textarea, select").not(".chooser").toPOST();
-                common.ajax_post("waitinglist_new", formdata)
-                    .then(function(createdID) {
-                        if (mode == "add") {
-                            header.show_info(_("Waiting list entry successfully added."));
-                        }
-                        else {
-                            if (createdID != "0") { common.route("waitinglist?id=" + createdID); }
-                        }
-                    })
-                    .always(function() {
-                        $(".asm-content button").button("enable");
-                    });
+                let formdata = $("input, textarea, select").not(".chooser").toPOST();
+                try {
+                    let createdID = await common.ajax_post("waitinglist_new", formdata);
+                    if (mode == "add") {
+                        header.show_info(_("Waiting list entry successfully added."));
+                    }
+                    else {
+                        if (createdID != "0") { common.route("waitinglist?id=" + createdID); }
+                    }
+                }
+                finally {
+                    $(".asm-content button").button("enable");
+                }
             };
 
             // Buttons
             $("#add").button().click(function() {
-                addWaitingList("add");
+                add_waiting_list("add");
             });
 
             $("#addedit").button().click(function() {
-                addWaitingList("addedit");
+                add_waiting_list("addedit");
             });
 
             $("#reset").button().click(function() {
@@ -161,13 +162,15 @@ $(function() {
         },
 
         reset: function() {
+
+            $("#description, #reasonforwantingtopart, #comments").val("").change();
+
             // Set select box default values
             $("#species").val(config.str("AFDefaultSpecies"));
             $("#size").val(config.str("AFDefaultSize"));
             $("#urgency").val(config.str("WaitingListDefaultUrgency"));
 
             // Default dates
-            $(".asm-textbox, .asm-textarea, .asm-textareafixed").val("").change();
             $(".asm-checkbox").prop("checked", false).change();
             $(".asm-personchooser").personchooser("clear");
             $("#dateputon").val(format.date(new Date()));

@@ -1,9 +1,10 @@
-/*jslint browser: true, forin: true, eqeq: true, white: true, sloppy: true, vars: true, nomen: true */
 /*global $, jQuery, _, asm, common, config, controller, dlgfx, format, header, html, validate */
 
 $(function() {
 
-    var move_reclaim = {
+    "use strict";
+
+    const move_reclaim = {
 
         render: function() {
             return [
@@ -12,34 +13,34 @@ $(function() {
                 html.content_header(_("Reclaim an animal"), true),
                 '<div id="fosterinfo" class="ui-state-highlight ui-corner-all" style="margin-top: 5px; padding: 0 .7em; width: 60%; margin-left: auto; margin-right: auto">',
                 '<p class="centered">',
-                '<span class="ui-icon ui-icon-info" style="float: left; margin-right: .3em;"></span>',
+                '<span class="ui-icon ui-icon-info"></span>',
                 _("This animal is currently fostered, it will be automatically returned first."),
                 '</p>',
                 '</div>',
                 '<div id="retailerinfo" class="ui-state-highlight ui-corner-all" style="margin-top: 5px; padding: 0 .7em; width: 60%; margin-left: auto; margin-right: auto">',
                 '<p class="centered">',
-                '<span class="ui-icon ui-icon-info" style="float: left; margin-right: .3em;"></span>',
+                '<span class="ui-icon ui-icon-info"></span>',
                 _("This animal is currently at a retailer, it will be automatically returned first."),
                 '</p>',
                 '</div>',
                 '<div id="reserveinfo" class="ui-state-highlight ui-corner-all" style="margin-top: 5px; padding: 0 .7em; width: 60%; margin-left: auto; margin-right: auto">',
                 '<p class="centered">',
-                '<span class="ui-icon ui-icon-info" style="float: left; margin-right: .3em;"></span>',
+                '<span class="ui-icon ui-icon-info"></span>',
                 _("This animal has active reservations, they will be cancelled."),
                 '</p>',
                 '</div>',
                 '<div id="notonshelter" class="ui-state-error ui-corner-all" style="margin-top: 5px; padding: 0 .7em; width: 60%; margin-left: auto; margin-right: auto">',
-                '<p class="centered"><span class="ui-icon ui-icon-alert" style="float: left; margin-right: .3em;"></span>',
+                '<p class="centered"><span class="ui-icon ui-icon-alert"></span>',
                 '<span class="centered">' + _("This animal is not on the shelter.") + '</span>',
                 '</p>',
                 '</div>',
                 '<div id="crueltycase" class="ui-state-error ui-corner-all" style="margin-top: 5px; padding: 0 .7em; width: 60%; margin-left: auto; margin-right: auto">',
-                '<p class="centered"><span class="ui-icon ui-icon-alert" style="float: left; margin-right: .3em;"></span>',
+                '<p class="centered"><span class="ui-icon ui-icon-alert"></span>',
                 '<span class="centered">' + _("This animal is part of a cruelty case and should not leave the shelter.") + '</span>',
                 '</p>',
                 '</div>',
                 '<div id="quarantine" class="ui-state-error ui-corner-all" style="margin-top: 5px; padding: 0 .7em; width: 60%; margin-left: auto; margin-right: auto">',
-                '<p class="centered"><span class="ui-icon ui-icon-alert" style="float: left; margin-right: .3em;"></span>',
+                '<p class="centered"><span class="ui-icon ui-icon-alert"></span>',
                 '<span class="centered">' + _("This animal is currently quarantined and should not leave the shelter.") + '</span>',
                 '</p>',
                 '</div>',
@@ -72,12 +73,18 @@ $(function() {
                 '<input id="movementdate" data="movementdate" class="asm-textbox asm-datebox" title="' + _("The date the animal was reclaimed") + '" />',
                 '</td>',
                 '</tr>',
+                '<tr id="commentsrow">',
+                '<td><label for="comments">' + _("Comments") + '</label></td>',
+                '<td>',
+                '<textarea class="asm-textarea" id="comments" data="comments" rows="3"></textarea>',
+                '</td>',
+                '</tr>',
                 '</table>',
                 html.content_footer(),
                 '<div id="payment"></div>',
                 html.content_header(_("Boarding Cost"), true),
                 '<div id="costdisplay" class="ui-state-highlight ui-corner-all" style="margin-top: 5px; padding: 0 .7em; width: 60%; margin-left: auto; margin-right: auto">',
-                '<p class="centered"><span class="ui-icon ui-icon-info" style="float: left; margin-right: .3em;"></span>',
+                '<p class="centered"><span class="ui-icon ui-icon-info"></span>',
                 '<span id="costdata" class="centered"></span>',
                 '</p>',
                 '</div>',
@@ -104,7 +111,7 @@ $(function() {
         },
 
         bind: function() {
-            var validation = function() {
+            const validation = function() {
                 // Remove any previous errors
                 header.hide_error();
                 validate.reset();
@@ -121,7 +128,7 @@ $(function() {
                     return false;
                 }
                 // date
-                if ($.trim($("#movementdate").val()) == "") {
+                if (common.trim($("#movementdate").val()) == "") {
                     header.show_error(_("This type of movement requires a date."));
                     validate.highlight("movementdate");
                     return false;
@@ -130,9 +137,8 @@ $(function() {
             };
 
             // Callback when animal is changed
-            var current_animal = null;
             $("#animal").animalchooser().bind("animalchooserchange", function(event, rec) {
-                current_animal = rec;
+                
                 // Hide things before we start
                 $("#costdisplay").closest(".ui-widget").fadeOut();
                 $("#fosterinfo").fadeOut();
@@ -177,12 +183,12 @@ $(function() {
 
                 // Grab cost information if option is on
                 if (config.bool("CreateBoardingCostOnAdoption")) {
-                    var formdata = "mode=cost&id=" + rec.ID;
+                    let formdata = "mode=cost&id=" + rec.ID;
                     common.ajax_post("move_reclaim", formdata)
                         .then(function(data) {
-                            var bits = data.split("||");
-                            $("#costdata").html(bits[1]);
-                            $("#costamount").val(bits[0]);
+                            let [costamount, costdata] = data.split("||");
+                            $("#costamount").val(costamount);
+                            $("#costdata").html(costdata);
                             $("#costtype").val(config.str("BoardingCostType"));
                             $("#costdisplay").closest(".ui-widget").fadeIn();
                         });
@@ -191,9 +197,7 @@ $(function() {
             });
 
             // Callback when person is changed
-            var current_person = null;
             $("#person").personchooser().bind("personchooserchange", function(event, rec) {
-                current_person = rec;
 
                 // Default giftaid if the person is registered
                 $("#payment").payments("option", "giftaid", rec.ISGIFTAID == 1);
@@ -223,29 +227,25 @@ $(function() {
             // Remove any retired lookups from the lists
             $(".asm-selectbox").select("removeRetiredOptions");
 
-            $("#reclaim").button().click(function() {
+            $("#reclaim").button().click(async function() {
                 if (!validation()) { return; }
                 $("#reclaim").button("disable");
                 header.show_loading(_("Creating..."));
-
-                var formdata = "mode=create&" + $("input, select").toPOST();
-                common.ajax_post("move_reclaim", formdata)
-                    .then(function(data) {
-
-                        $("#movementid").val(data);
-
-                        var u = "move_gendoc?" +
-                            "linktype=MOVEMENT&id=" + data + 
-                            "&message=" + encodeURIComponent(common.base64_encode(_("Reclaim successfully created.") + " " + 
-                                $(".animalchooser-display").html() + " " + html.icon("right") + " " +
-                                $(".personchooser-display .justlink").html() ));
-                        common.route(u);
-
-                    })
-                    .always(function() {
-                        header.hide_loading();
-                        $("#reclaim").button("enable");
-                    });
+                try {
+                    let formdata = "mode=create&" + $("input, select, textarea").toPOST();
+                    let data = await common.ajax_post("move_reclaim", formdata);
+                    $("#movementid").val(data);
+                    let u = "move_gendoc?" +
+                        "linktype=MOVEMENT&id=" + data + 
+                        "&message=" + encodeURIComponent(common.base64_encode(_("Reclaim successfully created.") + " " + 
+                            $(".animalchooser-display").html() + " " + html.icon("right") + " " +
+                            $(".personchooser-display .justlink").html() ));
+                    common.route(u);
+                }
+                finally {
+                    header.hide_loading();
+                    $("#reclaim").button("enable");
+                }
             });
         },
 

@@ -1,9 +1,10 @@
-/*jslint browser: true, forin: true, eqeq: true, white: true, sloppy: true, vars: true, nomen: true */
 /*global $, jQuery, _, asm, common, config, controller, dlgfx, edit_header, format, header, html, tableform, validate */
 
 $(function() {
 
-    var statusmap = {
+    "use strict";
+
+    const statusmap = {
         1: _("New"),
         2: _("Confirmed"),
         3: _("Hold"),
@@ -11,15 +12,7 @@ $(function() {
         10: _("Cancelled"),
         11: _("Completed")
     };
-    var statuses = [
-        { ID: 1, NAME: _("New") },
-        { ID: 2, NAME: _("Confirmed") },
-        { ID: 3, NAME: _("Hold") },
-        { ID: 4, NAME: _("Scheduled") },
-        { ID: 10, NAME: _("Cancelled") },
-        { ID: 11, NAME: _("Completed") }
-    ];
-    var statusmenu = [
+    const statusmenu = [
         "1|" + _("New"),
         "2|" + _("Confirmed"),
         "3|" + _("Hold"),
@@ -28,12 +21,12 @@ $(function() {
         "11|" + _("Completed")
     ];
 
-    var COMPLETED_STATUSES = 10;
+    const COMPLETED_STATUSES = 10;
 
-    var transport = {
+    const transport = {
 
         model: function() {
-            var dialog = {
+            const dialog = {
                 add_title: _("Add transport"),
                 edit_title: _("Edit transport"),
                 edit_perm: 'ctr',
@@ -44,8 +37,9 @@ $(function() {
                     { json_field: "ANIMALID", post_field: "animal", label: _("Animal"), type: "animal" },
                     { json_field: "ANIMALS", post_field: "animals", label: _("Animals"), type: "animalmulti" },
                     { json_field: "DRIVEROWNERID", post_field: "driver", label: _("Driver"), type: "person", personfilter: "driver" },
+                    { json_field: "TRANSPORTREFERENCE", post_field: "reference", label: _("Reference"), type: "text" },
                     { json_field: "TRANSPORTTYPEID", post_field: "type", label: _("Type"), type: "select", options: { rows: controller.transporttypes, displayfield: "TRANSPORTTYPENAME", valuefield: "ID" }},
-                    { json_field: "STATUS", post_field: "status", label: _("Status"), type: "select", options: { rows: statuses, displayfield: "NAME", valuefield: "ID" }},
+                    { json_field: "STATUS", post_field: "status", label: _("Status"), type: "select", options: { rows: controller.statuses, displayfield: "NAME", valuefield: "ID" }},
                     { json_field: "MILES", post_field: "miles", label: transport.miles_label(), type: "number", defaultval: 0 },
                     { json_field: "COST", post_field: "cost", label: _("Cost"), type: "currency", hideif: function() { return !config.bool("ShowCostAmount"); } },
                     { json_field: "COSTPAIDDATE", post_field: "costpaid", label: _("Paid"), type: "date", hideif: function() { return !config.bool("ShowCostPaid"); } },
@@ -56,6 +50,8 @@ $(function() {
                     { json_field: "PICKUPTOWN", post_field: "pickuptown", label: _("City"), type: "text" },
                     { json_field: "PICKUPCOUNTY", post_field: "pickupcounty", label: _("State"), type: "text" },
                     { json_field: "PICKUPPOSTCODE", post_field: "pickuppostcode", label: _("Zipcode"), type: "text" },
+                    { json_field: "PICKUPCOUNTRY", post_field: "pickupcountry", label: _("Country"), type: "text", 
+                        hideif: function() { return config.bool("HideCountry"); }},
                     { json_field: "PICKUPDATETIME", post_field: "pickupdate", label: _("on"), type: "date", validation: "notblank", defaultval: new Date() },
                     { json_field: "PICKUPDATETIME", post_field: "pickuptime", label: _("at"), type: "time", validation: "notblank", defaultval: format.time(new Date()) },
                     { json_field: "DROPOFFOWNERID", post_field: "dropoff", label: _("Dropoff"), personmode: "brief", type: "person" },
@@ -63,13 +59,14 @@ $(function() {
                     { json_field: "DROPOFFTOWN", post_field: "dropofftown", label: _("City"), type: "text" },
                     { json_field: "DROPOFFCOUNTY", post_field: "dropoffcounty", label: _("State"), type: "text" },
                     { json_field: "DROPOFFPOSTCODE", post_field: "dropoffpostcode", label: _("Zipcode"), type: "text" },
-
+                    { json_field: "DROPOFFCOUNTRY", post_field: "dropoffcountry", label: _("Country"), type: "text", 
+                        hideif: function() { return config.bool("HideCountry"); }},
                     { json_field: "DROPOFFDATETIME", post_field: "dropoffdate", label: _("on"), type: "date", validation: "notblank", defaultval: new Date() },
                     { json_field: "DROPOFFDATETIME", post_field: "dropofftime", label: _("at"), type: "time", validation: "notblank", defaultval: format.time(new Date()) }
                 ]
             };
 
-            var table = {
+            const table = {
                 rows: controller.rows,
                 idcolumn: "ID",
                 edit: function(row) {
@@ -99,6 +96,7 @@ $(function() {
                 columns: [
                     { field: "TRANSPORTTYPENAME", display: _("Type") },
                     { field: "STATUS", display: _("Status"), formatter: function(row) { return statusmap[row.STATUS]; }},
+                    { field: "TRANSPORTREFERENCE", display: _("Reference")},
                     { field: "IMAGE", display: "", 
                         formatter: function(row) {
                             if (!row.ANIMALID) { return ""; }
@@ -123,7 +121,8 @@ $(function() {
                     { field: "DRIVER", display: _("Driver"), formatter: function(row) {
                             if (row.DRIVEROWNERID) {
                                 return html.person_link(row.DRIVEROWNERID, row.DRIVEROWNERNAME) + '<br />' +
-                                    row.DRIVEROWNERADDRESS + "<br/>" + row.DRIVEROWNERTOWN + "<br />" + row.DRIVEROWNERCOUNTY + " " + row.DRIVEROWNERPOSTCODE;
+                                    row.DRIVEROWNERADDRESS + "<br/>" + row.DRIVEROWNERTOWN + "<br />" + row.DRIVEROWNERCOUNTY + " " + row.DRIVEROWNERPOSTCODE +
+                                    (!config.bool("HideCountry") ? "<br/>" + row.DRIVEROWNERCOUNTRY : "");
                             }
                             return "";
                         }
@@ -131,9 +130,11 @@ $(function() {
                     { field: "PICKUP", display: _("Pickup"), formatter: function(row) {
                             if (row.PICKUPOWNERID && row.PICKUPOWNERID != "0") {
                                 return html.person_link(row.PICKUPOWNERID, row.PICKUPOWNERNAME) + '<br />' +
-                                    row.PICKUPADDRESS + "<br/>" + row.PICKUPTOWN + "<br />" + row.PICKUPCOUNTY + " " + row.PICKUPPOSTCODE;
+                                    row.PICKUPADDRESS + "<br/>" + row.PICKUPTOWN + "<br />" + row.PICKUPCOUNTY + " " + row.PICKUPPOSTCODE + 
+                                    (!config.bool("HideCountry") ? "<br/>" + row.PICKUPCOUNTRY : "");
                             }
-                            return row.PICKUPADDRESS + "<br/>" + row.PICKUPTOWN + "<br/>" + row.PICKUPCOUNTY + "<br/>" + row.PICKUPPOSTCODE;
+                            return row.PICKUPADDRESS + "<br/>" + row.PICKUPTOWN + "<br/>" + row.PICKUPCOUNTY + "<br/>" + row.PICKUPPOSTCODE + 
+                                (!config.bool("HideCountry") ? "<br/>" + row.PICKUPCOUNTRY : "");
                         }
                     },
                     { field: "PICKUPDATETIME", display: _("at"), initialsort: true, initialsortdirection: "desc",
@@ -144,9 +145,11 @@ $(function() {
                     { field: "DROPOFF", display: _("Dropoff"), formatter: function(row) {
                             if (row.DROPOFFOWNERID && row.DROPOFFOWNERID != "0") {
                                 return html.person_link(row.DROPOFFOWNERID, row.DROPOFFOWNERNAME) + '<br />' +
-                                    row.DROPOFFADDRESS + "<br/>" + row.DROPOFFTOWN + "<br/>" + row.DROPOFFCOUNTY + "<br/>" + row.DROPOFFPOSTCODE;
+                                    row.DROPOFFADDRESS + "<br/>" + row.DROPOFFTOWN + "<br/>" + row.DROPOFFCOUNTY + "<br/>" + row.DROPOFFPOSTCODE + 
+                                    (!config.bool("HideCountry") ? "<br/>" + row.DROPOFFCOUNTRY : "");
                             }
-                            return row.DROPOFFADDRESS + "<br/>" + row.DROPOFFTOWN + "<br/>" + row.DROPOFFCOUNTY + "<br/>" + row.DROPOFFPOSTCODE;
+                            return row.DROPOFFADDRESS + "<br/>" + row.DROPOFFTOWN + "<br/>" + row.DROPOFFCOUNTY + "<br/>" + row.DROPOFFPOSTCODE + 
+                                (!config.bool("HideCountry") ? "<br/>" + row.DROPOFFCOUNTRY : "");
                         }
                     },
                     { field: "DROPOFFDATETIME", display: _("at"), 
@@ -165,119 +168,112 @@ $(function() {
                 ]
             };
 
-            var buttons = [
-                 { id: "new", text: _("New Transport"), icon: "transport", enabled: "always", perm: "atr",
-                     click: function() { 
-                         $("#driver").personchooser("clear");
-                         $("#pickup").personchooser("clear");
-                         $("#dropoff").personchooser("clear");
-                         $("#animal").animalchooser("clear");
-                         if (controller.animal) {
+            const buttons = [
+                { id: "new", text: _("New Transport"), icon: "transport", enabled: "always", perm: "atr",
+                    click: async function() { 
+                        $("#driver").personchooser("clear");
+                        $("#pickup").personchooser("clear");
+                        $("#dropoff").personchooser("clear");
+                        $("#animal").animalchooser("clear");
+                        if (controller.animal) {
                             $("#animal").animalchooser("loadbyid", controller.animal.ID);
-                         }
-                         $("#animal").closest("tr").show();
-                         $("#animals").closest("tr").hide();
-                         tableform.dialog_show_add(dialog)
-                             .then(function() {
-                                 return tableform.fields_post(dialog.fields, "mode=create", "transport");
-                             })
-                             .then(function(response) {
-                                 var row = {};
-                                 row.ID = response;
-                                 tableform.fields_update_row(dialog.fields, row);
-                                 transport.set_extra_fields(row);
-                                 controller.rows.push(row);
-                                 tableform.table_update(table);
-                                 tableform.dialog_close();
-                             })
-                             .fail(function() {
-                                 tableform.dialog_enable_buttons();
-                             });
-                     } 
-                 },
-                 { id: "bulk", text: _("Bulk Transport"), icon: "transport", enabled: "always", perm: "atr", 
-                     hideif: function() { return controller.animal; }, 
-                     click: function() { 
+                        }
+                        $("#animal").closest("tr").show();
+                        $("#animals").closest("tr").hide();
+                        await tableform.dialog_show_add(dialog);
+                        try {
+                            let response = await tableform.fields_post(dialog.fields, "mode=create", "transport");
+                            let row = {};
+                            row.ID = response;
+                            tableform.fields_update_row(dialog.fields, row);
+                            transport.set_extra_fields(row);
+                            controller.rows.push(row);
+                            tableform.table_update(table);
+                            tableform.dialog_close();
+                        }
+                        catch(err) {
+                            log.error(err, err);
+                            tableform.dialog_enable_buttons();
+                        }
+                    } 
+                },
+                { id: "bulk", text: _("Bulk Transport"), icon: "transport", enabled: "always", perm: "atr", 
+                    hideif: function() { return controller.animal; }, 
+                    click: async function() { 
                         $("#animal").closest("tr").hide();
                         $("#animals").closest("tr").show();
                         $("#animals").animalchoosermulti("clear");
                         $("#dialog-tableform .asm-textbox, #dialog-tableform .asm-textarea").val("");
-                        tableform.dialog_show_add(dialog)
-                            .then(function() {
-                                return tableform.fields_post(dialog.fields, "mode=createbulk", "transport");
-                            })
-                            .then(function(response) {
-                                common.route_reload();
-                            })
-                            .fail(function() {
-                                tableform.dialog_enable_buttons();   
-                            });
+                        await tableform.dialog_show_add(dialog);
+                        try {
+                            await tableform.fields_post(dialog.fields, "mode=createbulk", "transport");
+                            common.route_reload();
+                        }
+                        catch(err) {
+                            log.error(err, err);
+                            tableform.dialog_enable_buttons();   
+                        }
                     }
-                 },
-                 { id: "clone", text: _("Clone"), icon: "copy", enabled: "one", perm: "atr",
-                     hideif: function() { return controller.animal; }, 
-                     click: function() { 
+                },
+                { id: "clone", text: _("Clone"), icon: "copy", enabled: "one", perm: "atr",
+                    hideif: function() { return controller.animal; }, 
+                    click: async function() { 
                         $("#animal").closest("tr").hide();
                         $("#animals").closest("tr").show();
                         $("#animals").animalchoosermulti("clear");
                         $("#dialog-tableform .asm-textbox, #dialog-tableform .asm-textarea").val("");
-                        tableform.dialog_show_add(dialog, {
+                        await tableform.dialog_show_add(dialog, {
                                 onload: function() {
-                                     var row = tableform.table_selected_row(table);
+                                     let row = tableform.table_selected_row(table);
                                      tableform.fields_populate_from_json(dialog.fields, row);
                                 }
-                            })
-                            .then(function() {
-                                return tableform.fields_post(dialog.fields, "mode=createbulk", "transport");
-                            })
-                            .then(function(response) {
-                                common.route_reload();
-                            })
-                            .fail(function() {
-                                tableform.dialog_enable_buttons();   
                             });
+                        try {
+                            await tableform.fields_post(dialog.fields, "mode=createbulk", "transport");
+                            common.route_reload();
+                        }
+                        catch(err) {
+                            log.error(err, err);
+                            tableform.dialog_enable_buttons();   
+                        }
                     }
-                 },
-                 { id: "delete", text: _("Delete"), icon: "delete", enabled: "multi", perm: "dtr",
-                     click: function() { 
-                         tableform.delete_dialog()
-                             .then(function() {
-                                 tableform.buttons_default_state(buttons);
-                                 var ids = tableform.table_ids(table);
-                                 return common.ajax_post("transport", "mode=delete&ids=" + ids);
-                             })
-                             .then(function() {
-                                 tableform.table_remove_selected_from_json(table, controller.rows);
-                                 tableform.table_update(table);
-                             });
-                     } 
-                 },
-                 { id: "setstatus", text: _("Status"), icon: "complete", type: "buttonmenu", options: statusmenu, enabled: "multi", perm: "ctr", 
-                    click: function(newstatus) {
-                        var ids = tableform.table_ids(table);
-                        common.ajax_post("transport", "mode=setstatus&ids=" + ids + "&newstatus=" + newstatus)
-                            .then(function() {
-                                $.each(tableform.table_selected_rows(table), function(i, v) {
-                                    v.STATUS = newstatus;
-                                });
-                                tableform.table_update(table);
-                            });
+                },
+                { id: "delete", text: _("Delete"), icon: "delete", enabled: "multi", perm: "dtr",
+                    click: async function() { 
+                        await tableform.delete_dialog();
+                        tableform.buttons_default_state(buttons);
+                        let ids = tableform.table_ids(table);
+                        await common.ajax_post("transport", "mode=delete&ids=" + ids);
+                        tableform.table_remove_selected_from_json(table, controller.rows);
+                        tableform.table_update(table);
+                    } 
+                },
+                { id: "setstatus", text: _("Status"), icon: "complete", type: "buttonmenu", options: statusmenu, enabled: "multi", perm: "ctr", 
+                    click: async function(newstatus) {
+                        let ids = tableform.table_ids(table);
+                        await common.ajax_post("transport", "mode=setstatus&ids=" + ids + "&newstatus=" + newstatus);
+                        $.each(tableform.table_selected_rows(table), function(i, v) {
+                            v.STATUS = newstatus;
+                        });
+                        tableform.table_update(table);
                     }
-                 },
-                 { id: "offset", type: "dropdownfilter", 
-                     options: [ "item|" + _("Due today"), "item2|" + _("Due in next week") ],
-                     click: function(selval) {
+                },
+                { id: "document", text: _("Document"), icon: "document", enabled: "multi", perm: "gaf", 
+                    tooltip: _("Generate document from this transport"), type: "buttonmenu" },
+                { id: "offset", type: "dropdownfilter", 
+                    options: [ "item|" + _("Due today"), "item2|" + _("Due in next week") ],
+                    click: function(selval) {
                         common.route(controller.name + "?offset=" + selval);
-                     },
-                     hideif: function(row) {
-                         // TODO: Don't show at all for now, not sure what this will be
-                         return true;
-                         // Don't show for animal records
-                         //if (controller.animal) {
-                         //    return true;
-                         //}
-                     }
-                 }
+                    },
+                    hideif: function(row) {
+                        // TODO: Don't show at all for now, not sure what this will be
+                        return true;
+                        // Don't show for animal records
+                        //if (controller.animal) {
+                        //    return true;
+                        //}
+                    }
+                }
 
             ];
             this.dialog = dialog;
@@ -300,6 +296,7 @@ $(function() {
                 row.DRIVEROWNERTOWN = $("#driver").personchooser("get_selected").OWNERTOWN; 
                 row.DRIVEROWNERCOUNTY = $("#driver").personchooser("get_selected").OWNERCOUNTY; 
                 row.DRIVEROWNERPOSTCODE = $("#driver").personchooser("get_selected").OWNERPOSTCODE; 
+                row.DRIVEROWNERCOUNTRY = $("#driver").personchooser("get_selected").OWNERCOUNTRY; 
             }
             if (row.PICKUPOWNERID && row.PICKUPOWNERID != "0") { 
                 row.PICKUPOWNERNAME = $("#pickup").personchooser("get_selected").OWNERNAME; 
@@ -307,6 +304,7 @@ $(function() {
                 row.PICKUPOWNERTOWN = $("#pickup").personchooser("get_selected").OWNERTOWN; 
                 row.PICKUPOWNERCOUNTY = $("#pickup").personchooser("get_selected").OWNERCOUNTY; 
                 row.PICKUPOWNERPOSTCODE = $("#pickup").personchooser("get_selected").OWNERPOSTCODE; 
+                row.PICKUPOWNERCOUNTRY = $("#pickup").personchooser("get_selected").OWNERCOUNTRY; 
             }
             if (row.DROPOFFOWNERID && row.DROPOFFOWNERID != "0") { 
                 row.DROPOFFOWNERNAME = $("#dropoff").personchooser("get_selected").OWNERNAME; 
@@ -314,6 +312,7 @@ $(function() {
                 row.DROPOFFOWNERTOWN = $("#dropoff").personchooser("get_selected").OWNERTOWN; 
                 row.DROPOFFOWNERCOUNTY = $("#dropoff").personchooser("get_selected").OWNERCOUNTY; 
                 row.DROPOFFOWNERPOSTCODE = $("#dropoff").personchooser("get_selected").OWNERPOSTCODE; 
+                row.DROPOFFOWNERCOUNTRY = $("#dropoff").personchooser("get_selected").OWNERCOUNTRY; 
             }
         }, 
 
@@ -328,9 +327,13 @@ $(function() {
         },
 
         render: function() {
-            var s = "";
+            let s = "";
             this.model();
             s += tableform.dialog_render(this.dialog);
+            s += '<div id="button-document-body" class="asm-menu-body">' +
+                '<ul class="asm-menu-list">' +
+                edit_header.template_list(controller.templates, "TRANSPORT", 0) +
+                '</ul></div>';
             if (controller.name.indexOf("animal_") == 0) {
                 s += edit_header.animal_edit_header(controller.animal, "transport", controller.tabcounts);
             }
@@ -351,16 +354,27 @@ $(function() {
             
             // When we pickup and dropoff people, autofill the addresses
             $("#pickup").personchooser().bind("personchooserchange", function(event, rec) { 
-                $("#pickupaddress").val(rec.OWNERADDRESS.replace("\n", ", "));
-                $("#pickuptown").val(rec.OWNERTOWN);
-                $("#pickupcounty").val(rec.OWNERCOUNTY);
-                $("#pickuppostcode").val(rec.OWNERPOSTCODE);
+                $("#pickupaddress").val(html.decode(rec.OWNERADDRESS.replace("\n", ", ")));
+                $("#pickuptown").val(html.decode(rec.OWNERTOWN));
+                $("#pickupcounty").val(html.decode(rec.OWNERCOUNTY));
+                $("#pickuppostcode").val(html.decode(rec.OWNERPOSTCODE));
+                $("#pickupcountry").val(html.decode(rec.OWNERCOUNTRY));
             });
             $("#dropoff").personchooser().bind("personchooserchange", function(event, rec) { 
-                $("#dropoffaddress").val(rec.OWNERADDRESS.replace("\n", ", "));
-                $("#dropofftown").val(rec.OWNERTOWN);
-                $("#dropoffcounty").val(rec.OWNERCOUNTY);
-                $("#dropoffpostcode").val(rec.OWNERPOSTCODE);
+                $("#dropoffaddress").val(html.decode(rec.OWNERADDRESS.replace("\n", ", ")));
+                $("#dropofftown").val(html.decode(rec.OWNERTOWN));
+                $("#dropoffcounty").val(html.decode(rec.OWNERCOUNTY));
+                $("#dropoffpostcode").val(html.decode(rec.OWNERPOSTCODE));
+                $("#dropoffcountry").val(html.decode(rec.OWNERCOUNTRY));
+            });
+
+            // Add click handlers to templates
+            $(".templatelink").click(function() {
+                // Update the href as it is clicked so default browser behaviour
+                // continues on to open the link in a new window
+                let template_name = $(this).attr("data");
+                let ids = tableform.table_ids(transport.table);
+                $(this).prop("href", "document_gen?linktype=TRANSPORT&id=" + ids + "&dtid=" + template_name);
             });
 
         },
@@ -384,7 +398,7 @@ $(function() {
         name: "transport",
         animation: function() { return controller.name == "transport" ? "book" : "formtab"; },
         title:  function() { 
-            var t = "";
+            let t = "";
             if (controller.name == "animal_transport") {
                 t = common.substitute(_("{0} - {1} ({2} {3} aged {4})"), { 
                     0: controller.animal.ANIMALNAME, 1: controller.animal.CODE, 2: controller.animal.SEXNAME,

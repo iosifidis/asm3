@@ -1,33 +1,33 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 import os, sys
 
 # Add our modules to the sys.path
 sys.path.append(os.getcwd())
 
-import al
-import audit
-import animal
-import cachedisk
-import clinic
-import configuration
-import db
-import dbfs
-import dbupdate
-import diary
-import i18n
-import lostfound
-import media
-import movement
-import onlineform
-import person
-import publish
-import reports as extreports
-import smcom
+from asm3 import al
+from asm3 import audit
+from asm3 import animal
+from asm3 import cachedisk
+from asm3 import clinic
+from asm3 import configuration
+from asm3 import db
+from asm3 import dbfs
+from asm3 import dbupdate
+from asm3 import diary
+from asm3 import i18n
+from asm3 import lostfound
+from asm3 import media
+from asm3 import movement
+from asm3 import onlineform
+from asm3 import person
+from asm3 import publish
+from asm3 import reports as extreports
+from asm3 import utils
+from asm3 import waitinglist
+from asm3.sitedefs import LOCALE, TIMEZONE, MULTIPLE_DATABASES, MULTIPLE_DATABASES_TYPE, MULTIPLE_DATABASES_MAP
+
 import time
-import utils
-import waitinglist
-from sitedefs import LOCALE, TIMEZONE, MULTIPLE_DATABASES, MULTIPLE_DATABASES_TYPE, MULTIPLE_DATABASES_MAP
 
 def ttask(fn, dbo):
     """ Runs a function and times how long it takes """
@@ -58,15 +58,15 @@ def daily(dbo):
             ttask(dbupdate.install_db_sequences, dbo)
             ttask(dbupdate.install_db_stored_procedures, dbo)
 
-        # Get the latest news from sheltermanager.com
-        configuration.asm_news(dbo, update=True)
-
         # Update on shelter and foster animal location fields
         ttask(animal.update_on_shelter_animal_statuses, dbo)
         ttask(animal.update_foster_animal_statuses, dbo)
 
         # Update on shelter animal variable data (age, time on shelter, etc)
         ttask(animal.update_on_shelter_variable_animal_data, dbo)
+
+        # Update variable data for young offshelter animals
+        ttask(animal.update_offshelter_young_variable_animal_data, dbo)
 
         # Update animal figures for reports
         ttask(animal.update_animal_figures, dbo)
@@ -118,6 +118,9 @@ def daily(dbo):
         # Email any reports set to run with batch
         ttask(extreports.email_daily_reports, dbo)
 
+        # Send fosterer medical reports
+        ttask(movement.send_fosterer_emails, dbo)
+
     except:
         em = str(sys.exc_info()[0])
         al.error("FAIL: running batch tasks: %s" % em, "cron.daily", dbo, sys.exc_info())
@@ -136,20 +139,52 @@ def reports_email(dbo):
 def publish_3pty(dbo):
     try:
         publishers = configuration.publishers_enabled(dbo)
+        freq = configuration.publisher_sub24_frequency(dbo)
         for p in publishers.split(" "):
-            if p != "html": # We do html/ftp publishing separate from others
-                publish.start_publisher(dbo, p, user="system", async=False)
+            # Services that we do more frequently than 24 hours are handled by 3pty_sub24
+            if publish.PUBLISHER_LIST[p]["sub24hour"] and freq != 0: continue
+            # We do html/ftp publishing separate from other publishers
+            if p == "html": continue
+            publish.start_publisher(dbo, p, user="system", newthread=False)
     except:
         em = str(sys.exc_info()[0])
         al.error("FAIL: uncaught error running third party publishers: %s" % em, "cron.publish_3pty", dbo, sys.exc_info())
 
+def publish_3pty_sub24(dbo):
+    try:
+        publishers = configuration.publishers_enabled(dbo)
+        freq = configuration.publisher_sub24_frequency(dbo)
+        hournow = dbo.now().hour
+        al.debug("chosen freq %s, current hour %s" % (freq, hournow), "cron.publish_3pty_sub24", dbo)
+        if freq == 0: return # 24 hour mode is covered by regular publish_3pty with the batch
+        elif freq == 2 and hournow not in [0,2,4,6,8,10,12,14,16,18,20,22]: return
+        elif freq == 4 and hournow not in [1,5,9,13,17,21]: return
+        elif freq == 6 and hournow not in [3,9,13,19]: return
+        elif freq == 8 and hournow not in [1,9,17]: return
+        elif freq == 12 and hournow not in [0,12]: return
+        for p in publishers.split(" "):
+            if publish.PUBLISHER_LIST[p]["sub24hour"]:
+                publish.start_publisher(dbo, p, user="system", newthread=False)
+    except:
+        em = str(sys.exc_info()[0])
+        al.error("FAIL: uncaught error running sub24 third party publishers: %s" % em, "cron.publish_3pty_sub24", dbo, sys.exc_info())
+
 def publish_html(dbo):
     try :
         if configuration.publishers_enabled(dbo).find("html") != -1:
-            publish.start_publisher(dbo, "html", user="system", async=False)
+            publish.start_publisher(dbo, "html", user="system", newthread=False)
     except:
         em = str(sys.exc_info()[0])
         al.error("FAIL: uncaught error running html publisher: %s" % em, "cron.publish_html", dbo, sys.exc_info())
+
+def maint_import_report(dbo):
+    try:
+        extreports.install_smcom_report_file(dbo, "system", os.environ["ASM3_REPORT"])
+        print("OK")
+    except:
+        em = str(sys.exc_info()[0])
+        print(em) # This one is designed to be run from the command line rather than cron
+        al.error("FAIL: uncaught error running import report: %s" % em, "cron.maint_import_report", dbo, sys.exc_info())
 
 def maint_recode_all(dbo):
     try:
@@ -191,11 +226,19 @@ def maint_animal_figures_annual(dbo):
 def maint_db_diagnostic(dbo):
     try:
         d = dbupdate.diagnostic(dbo)
-        for k, v in d.iteritems():
+        for k, v in d.items():
             print("%s: %s" % (k, v))
     except:
         em = str(sys.exc_info()[0])
         al.error("FAIL: uncaught error running maint_db_diagnostic: %s" % em, "cron.maint_db_diagnostic", dbo, sys.exc_info())
+
+def maint_db_fix_preferred_photos(dbo):
+    try:
+        d = dbupdate.fix_preferred_photos(dbo)
+        print("Fixed %d" % d)
+    except:
+        em = str(sys.exc_info()[0])
+        al.error("FAIL: uncaught error running maint_db_fix_preferred_photos: %s" % em, "cron.maint_db_fix_preferred_photos", dbo, sys.exc_info())
 
 def maint_db_dump(dbo):
     try:
@@ -204,6 +247,14 @@ def maint_db_dump(dbo):
     except:
         em = str(sys.exc_info()[0])
         al.error("FAIL: uncaught error running maint_db_dump: %s" % em, "cron.maint_db_dump", dbo, sys.exc_info())
+
+def maint_db_dump_hsqldb(dbo):
+    try:
+        for x in dbupdate.dump_hsqldb(dbo):
+            print(utils.cunicode(x).encode("utf-8"))
+    except:
+        em = str(sys.exc_info()[0])
+        al.error("FAIL: uncaught error running maint_db_dump_hsqldb: %s" % em, "cron.maint_db_dump_hsqldb", dbo, sys.exc_info())
 
 def maint_db_dump_dbfs_base64(dbo):
     try:
@@ -316,7 +367,7 @@ def maint_deduplicate_people(dbo):
 
 def maint_disk_cache(dbo):
     try:
-        cachedisk.remove_expired()
+        cachedisk.remove_expired(dbo.database)
     except:
         em = str(sys.exc_info()[0])
         al.error("FAIL: uncaught error running remove_expired: %s" % em, "cron.maint_disk_cache", dbo, sys.exc_info())
@@ -374,8 +425,12 @@ def run(dbo, mode):
         reports_email(dbo)
     elif mode == "publish_3pty":
         publish_3pty(dbo)
+    elif mode == "publish_3pty_sub24":
+        publish_3pty_sub24(dbo)
     elif mode == "publish_html":
         publish_html(dbo)
+    elif mode == "maint_import_report":
+        maint_import_report(dbo)
     elif mode == "maint_recode_all":
         maint_recode_all(dbo)
     elif mode == "maint_recode_shelter":
@@ -396,6 +451,8 @@ def run(dbo, mode):
         maint_animal_figures_annual(dbo)
     elif mode == "maint_db_diagnostic":
         maint_db_diagnostic(dbo)
+    elif mode == "maint_db_fix_preferred_photos":
+        maint_db_fix_preferred_photos(dbo)
     elif mode == "maint_db_dump":
         maint_db_dump(dbo)
     elif mode == "maint_db_dump_dbfs_base64":
@@ -408,6 +465,8 @@ def run(dbo, mode):
         maint_db_dump_animalcsv(dbo)
     elif mode == "maint_db_dump_personcsv":
         maint_db_dump_personcsv(dbo)
+    elif mode == "maint_db_dump_hsqldb":
+        maint_db_dump_hsqldb(dbo)
     elif mode == "maint_db_install":
         maint_db_install(dbo)
     elif mode == "maint_db_reinstall":
@@ -431,8 +490,8 @@ def run(dbo, mode):
     al.info("end %s: elapsed %0.2f secs" % (mode, elapsed), "cron.run", dbo)
 
 def run_all_map_databases(mode):
-    for alias in MULTIPLE_DATABASES_MAP.iterkeys():
-        dbo = db.get_multiple_database_info(alias)
+    for alias in MULTIPLE_DATABASES_MAP.keys():
+        dbo = db.get_database(alias)
         dbo.timeout = 0
         dbo.connection = dbo.connect()
         run(dbo, mode)
@@ -444,10 +503,7 @@ def run_default_database(mode):
     run(dbo, mode)
 
 def run_alias(mode, alias):
-    if MULTIPLE_DATABASES_TYPE == "smcom":
-        dbo = smcom.get_database_info(alias)
-    elif MULTIPLE_DATABASES_TYPE == "map" and alias != "%":
-        dbo  = db.get_multiple_database_info(alias)
+    dbo = db.get_database(alias)
     dbo.alias = alias
     if dbo.database == "FAIL":
         print("Invalid database alias '%s'" % (alias))
@@ -458,7 +514,7 @@ def run_alias(mode, alias):
         run(dbo, mode)
 
 def run_override_database(mode, dbtype, host, port, username, password, database, alias):
-    dbo = db.get_database(dbtype)
+    dbo = db.get_dbo(dbtype)
     dbo.dbtype = dbtype
     dbo.host = host
     dbo.port = port
@@ -487,11 +543,13 @@ def print_usage():
     print("       maint_animal_figures - calculate all monthly/annual figures for all time")
     print("       maint_animal_figures_annual - calculate all annual figures for all time")
     print("       maint_db_diagnostic - run database diagnostics")
+    print("       maint_db_fix_preferred_photos - fix/reset preferred flags for all photo media to latest")
     print("       maint_db_dump - produce a dump of INSERT statements to recreate the db")
     print("       maint_db_dump_dbfs_base64 - dump the dbfs table and include all content as base64")
     print("       maint_db_dump_merge - produce a dump of INSERT statements, renumbering IDs to +100000")
     print("       maint_db_dump_animalcsv - produce a CSV of animal/adoption/owner data")
     print("       maint_db_dump_personcsv - produce a CSV of person data")
+    print("       maint_db_dump_hsqldb - produce a complete HSQLDB file for ASM2")
     print("       maint_db_dump_smcom - produce an SQL dump for import into sheltermanager.com")
     print("       maint_db_install - install structure/data into a new empty database")
     print("       maint_db_reinstall - wipe the db and reinstall all default data and templates")
@@ -502,6 +560,7 @@ def print_usage():
     print("       maint_db_update - run any outstanding database updates")
     print("       maint_deduplicate_people - automatically merge duplicate people records")
     print("       maint_disk_cache - remove expired entries from the disk cache")
+    print("       maint_import_report - import report txt set file in ASM3_REPORT env")
     print("       maint_recode_all - regenerate all animal codes")
     print("       maint_recode_shelter - regenerate animals codes for all shelter animals")
     print("       maint_scale_animal_images - re-scales all the animal images in the database")

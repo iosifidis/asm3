@@ -1,11 +1,13 @@
-/*jslint browser: true, forin: true, eqeq: true, white: true, sloppy: true, vars: true, nomen: true */
 /*global $, jQuery, _, asm, common, config, controller, dlgfx, format, header, html, tableform, validate */
+
 $(function() {
 
-    var publish_logs = {
+    "use strict";
+
+    const publish_logs = {
 
         model: function() {
-            var table = {
+            const table = {
                 rows: controller.rows,
                 idcolumn: "ID",
                 edit: function(row) {
@@ -22,7 +24,7 @@ $(function() {
         },
 
         render: function() {
-            var s = "";
+            let s = "";
             this.model();
             s += html.content_header(_("Publishing Logs"));
             s += tableform.table_render(this.table);

@@ -1,9 +1,10 @@
-/*jslint browser: true, forin: true, eqeq: true, white: true, sloppy: true, vars: true, nomen: true */
 /*global $, jQuery, _, asm, common, config, controller, dlgfx, format, header, html, validate */
 
 $(function() {
 
-    var publish = {
+    "use strict";
+
+    const publish = {
 
         render: function() {
             return [
@@ -11,32 +12,32 @@ $(function() {
                 'class="ui-helper-reset ui-widget-content ui-corner-all centered"',
                 'style="width: 60%; margin-left: auto; margin-right: auto; padding: 20px">',
                 '<div id="alreadyrunning" class="ui-state-error ui-corner-all" style="margin-top: 20px; padding: 0 .7em; display: none">',
-                '<p><span class="ui-icon ui-icon-alert" style="float: left; margin-right: .3em;"></span>',
+                '<p><span class="ui-icon ui-icon-alert"></span>',
                 _("A publish job is already running."),
                 '</p>',
                 '</div>',
 
                 '<div id="progress" style="margin-top: 10px"></div>',
                 '<div id="stopped" class="ui-state-highlight ui-corner-all" style="margin-top: 20px; padding: 0 .7em; display: none">',
-                '<p><span class="ui-icon ui-icon-info" style="float: left; margin-right: .3em;"></span>',
+                '<p><span class="ui-icon ui-icon-info"></span>',
                 _("No publishers are running."),
                 '</p>',
                 '</div>',
 
                 '<div id="lasterror" class="ui-state-error ui-corner-all" style="margin-top: 20px; padding: 0 .7em; display: none">',
-                '<p><span class="ui-icon ui-icon-alert" style="float: left; margin-right: .3em;"></span>',
+                '<p><span class="ui-icon ui-icon-alert"></span>',
                 '<span id="lasterrortext"></span>',
                 '</p>',
                 '</div>',
 
                 '<div id="complete" class="ui-state-highlight ui-corner-all" style="margin-top: 20px; padding: 0 .7em; display: none">',
-                '<p><span class="ui-icon ui-icon-info" style="float: left; margin-right: .3em;"></span>',
+                '<p><span class="ui-icon ui-icon-info"></span>',
                 _("Publishing complete."),
                 '</p>',
                 '</div>',
 
                 '<div id="running" class="ui-state-highlight ui-corner-all" style="margin-top: 20px; padding: 0 .7em; display: none">',
-                '<p><span class="ui-icon ui-icon-info" style="float: left; margin-right: .3em;"></span>',
+                '<p><span class="ui-icon ui-icon-info"></span>',
                 '<span id="runningtext"></span>',
                 '</p>',
                 '</div>',
@@ -52,13 +53,11 @@ $(function() {
 
             $("#progress").progressbar();
 
-            $("#button-stop").button().click(function() {
+            $("#button-stop").button().click(async function() {
                 $("#button-stop").button("disable");
-                common.ajax_post("publish", "mode=stop")
-                    .then(function() { 
-                        $("#button-stop").button("enable");
-                        publish.forcestop = true;
-                    });
+                await common.ajax_post("publish", "mode=stop");
+                $("#button-stop").button("enable");
+                publish.forcestop = true;
             });
 
         },
@@ -75,73 +74,67 @@ $(function() {
             setTimeout(publish.poll, 1000);
         },
 
-        poll: function() {
-            common.ajax_post("publish", "mode=poll").then(function(result) { 
-                var bits = result.split("|");
-                var publishername = bits[0];
-                var progress = bits[1];
-                var lasterror = bits[2];
-                
-                var newtext = _("{0} is running ({1}&#37; complete).").replace("{0}", publishername).replace("{1}", progress);
-                $("#progress").progressbar("option", "value", parseInt(progress, 10));
-                $("#runningtext").html(newtext);
+        poll: async function() {
+            let result = await common.ajax_post("publish", "mode=poll");
+            let [publishername, progress, lasterror] = result.split("|");
+            let newtext = _("{0} is running ({1}&#37; complete).").replace("{0}", publishername).replace("{1}", progress);
 
-                // Show the last error if there was one
-                if (lasterror != "") {
-                    $("#lasterrortext").html(lasterror);
-                    $("#lasterror").fadeIn();
-                    $("#stop").hide();
-                    return;
-                }
+            $("#progress").progressbar("option", "value", parseInt(progress, 10));
+            $("#runningtext").html(newtext);
 
-                // Publisher complete
-                if (progress == "100") {
-                    $("#complete").fadeIn();
+            // Show the last error if there was one
+            if (lasterror != "") {
+                $("#lasterrortext").html(lasterror);
+                $("#lasterror").fadeIn();
+                $("#stop").hide();
+                return;
+            }
+
+            // Publisher complete
+            if (progress == "100") {
+                $("#complete").fadeIn();
+                $("#running").hide();
+                $("#progress").hide();
+                $("#stop").hide();
+                return;
+            }
+
+            // No publisher running
+            if (publishername == "NONE") {
+
+                // Did the user force a stop?
+                if (publish.forcestop) {
+                    $("#stopped").fadeIn();
                     $("#running").hide();
                     $("#progress").hide();
                     $("#stop").hide();
-                    return;
                 }
-
-                // No publisher running
-                if (publishername == "NONE") {
-
-                    // Did the user force a stop?
-                    if (publish.forcestop) {
-                        $("#stopped").fadeIn();
-                        $("#running").hide();
-                        $("#progress").hide();
-                        $("#stop").hide();
-                    }
-                    
-                    // Ok, nothing was running
-                    else {
-                        $("#stopped").fadeIn();
-                        $("#running").hide();
-                        $("#progress").hide();
-                        $("#stop").hide();
-                    }
-
-                }
-
-                // Publisher is running
+                
+                // Ok, nothing was running
                 else {
-                    $("#running").fadeIn();
-                    $("#progress").fadeIn();
-                    $("#stop").fadeIn();
-                    $("#complete").hide();
-                    $("#stopped").hide();
+                    $("#stopped").fadeIn();
+                    $("#running").hide();
+                    $("#progress").hide();
+                    $("#stop").hide();
                 }
 
-                // Only schedule another poll if polling is enabled
-                // (note that publishing complete/error conditions
-                //  above drop out without telling us to poll any more).
-                if (publish.polling) {
-                    setTimeout(publish.poll, publish.poll_interval);
-                }
+            }
 
-            });
+            // Publisher is running
+            else {
+                $("#running").fadeIn();
+                $("#progress").fadeIn();
+                $("#stop").fadeIn();
+                $("#complete").hide();
+                $("#stopped").hide();
+            }
 
+            // Only schedule another poll if polling is enabled
+            // (note that publishing complete/error conditions
+            //  above drop out without telling us to poll any more).
+            if (publish.polling) {
+                setTimeout(publish.poll, publish.poll_interval);
+            }
         },
 
         destroy: function() {

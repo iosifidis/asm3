@@ -9,7 +9,7 @@ Eg:
 
     a = asm.Animal() # Empty constructor generates ID
     a.AnimalName = "Socks"
-    print a
+    print(a)
 
 Also has some extra functions for grabbing functions from PetFinder:
 
@@ -50,8 +50,16 @@ Also has some useful helper functions for reading CSVs and parsing values, eg:
 """
 
 import csv, datetime, re, time
-import os, sys, urllib2, base64
-from cStringIO import StringIO
+import os, sys, base64, requests
+
+import dbfread
+
+if sys.version_info[0] > 2: # PYTHON3
+    import urllib.request as urllib2
+    from io import StringIO
+else:
+    import urllib2
+    from cStringIO import StringIO
 
 # Next year code to use for animals when generating shelter codes
 nextyearcode = 1
@@ -69,18 +77,60 @@ pickuplocations = {}
 customcolours = {}
 
 # Dictionary of entry reasons
-entryreasons = {}
+entryreasons = {
+    "Marriage/Relationship split": 1,
+    "Allergies": 2,
+    "Biting": 3,
+    "Unable to Cope": 4,
+    "Unsuitable Accommodation": 5,
+    "Died": 6,
+    "Stray": 7,
+    "Sick/Injured": 8,
+    "Unable to Afford": 9,
+    "Abuse": 10,
+    "Abandoned": 11,
+    "Boarding": 12,
+    "Born in Shelter": 13,
+    "TNR - Trap/Neuter/Release": 14,
+    "Transfer from Other Shelter": 15,
+    "Transfer from Municipal Shelter": 16,
+    "Surrender": 17,
+    "Too Many Animals": 18
+}
 
 # Dictionary of donation types
 donationtypes = {
+#    "Donation": 1,
+#    "Adoption Fee": 2,
+#    "Waiting List Donation": 3,
+#    "Entry Donation": 4,
+#    "Animal Sponsorship": 5,
+#    "In-Kind Donation": 6
 }
 
 # Dictionary of test types
 testtypes = {
+#    "FIV": 1,
+#    "FLV": 2,
+#    "Heartworm": 3
 }
 
 # Dictionary of vaccination types
 vaccinationtypes = {
+#    "Distemper": 1,
+#    "Hepatitis": 2,
+#    "Leptospirosis": 3,
+#    "Rabies": 4,
+#    "Parainfluenza": 5,
+#    "Bordetella": 6, 
+#    "Parvovirus": 7,
+#    "DHLPP": 8,
+#    "FVRCP": 9,
+#    "Chlamydophila": 10,
+#    "FIV": 11,
+#    "FeLV": 12,
+#    "FIPV": 13,
+#    "FECV/FeCoV": 14
 }
 
 def atoi(s):
@@ -91,12 +141,13 @@ def atoi(s):
     except:
         return 0
 
-def csv_to_list(fname, strip = False, remove_control = False, uppercasekeys = False, unicodehtml = False):
+def csv_to_list(fname, strip = False, remove_control = False, remove_non_ascii = False, uppercasekeys = False, unicodehtml = False):
     """
     Reads the csv file fname and returns it as a list of maps 
     with the first row used as the keys.
     strip: If True, removes whitespace from all fields
     remove_control: If True, removes all ascii chars < 32
+    remove_non_ascii: If True, removes all ascii chars < 32 or > 127
     uppercasekeys: If True, runs upper() on headings/map keys
     unicodehtml: If True, interprets the file as utf8 and replaces unicode chars with HTML entities
     returns a list of maps
@@ -111,6 +162,9 @@ def csv_to_list(fname, strip = False, remove_control = False, uppercasekeys = Fa
         for s in f.readlines():
             if remove_control:
                 b.write(''.join(c for c in s if ord(c) >= 32))
+                b.write("\n")
+            if remove_non_ascii:
+                b.write(''.join(c for c in s if ord(c) >= 32 and ord(c) <= 127))
                 b.write("\n")
             elif unicodehtml:
                 b.write(s.decode("utf8").encode("ascii", "xmlcharrefreplace"))
@@ -163,6 +217,18 @@ def csv_to_list_cols(fname, cols, strip = False, remove_control = False, upperca
         o.append(row)
     return o
 
+""" when faced with a field type it doesn't understand, dbfread can produce an error
+    'Unknown field type xx'. This parser returns anything unrecognised as binary data """
+class ExtraFieldParser(dbfread.FieldParser):
+    def parse(self, field, data):
+        try:
+            return dbfread.FieldParser.parse(self, field, data)
+        except ValueError:
+            return data
+
+def read_dbf(name, encoding="cp1252"):
+    return dbfread.DBF(name, encoding=encoding, parserclass=ExtraFieldParser)
+
 def cint(s):
     try:
         return int(s)
@@ -175,9 +241,18 @@ def cfloat(s):
     except:
         return 0.0
 
+def good_with(s):
+    """ Returns 0 = unknown, 1 = no, 2 = yes for good with fields """
+    if s.lower().find("no") != -1: return 1
+    if s.lower().find("yes") != -1: return 2
+    return 0
+
 def get_currency(s):
+    if s is None: return 0
+    if type(s) == int or type(s) == float: return int(s * 100)
     if s.strip() == "": return 0
     s = s.replace("$", "")
+    s = s.replace("&nbsp;", "")
     try:
         return int(float(s) * 100)
     except:
@@ -273,6 +348,10 @@ def getdate_ddmmyyyy(s):
 def getdate_ddmmmyy(s):
     s = remove_time(s)
     return parse_date(s, "%d-%b-%y")
+
+def getdate_jackcess(s):
+    """ Parses dates in the Jackcess format: Thu Apr 23 00:00:00 BST 2015 """
+    return parse_date(s, "%a %b %d %H:%M:%S %Z %Y")
 
 def getdate_iso(s):
     s = remove_time(s)
@@ -393,6 +472,7 @@ colours = (
 )
 
 def colour_id_for_name(name, firstWordOnly = False, default = 1):
+    if name is None: return default
     if firstWordOnly:
         if name.find(" ") != -1: name = name[0:name.find(" ")]
         if name.find("/") != -1: name = name[0:name.find("/")]
@@ -402,14 +482,14 @@ def colour_id_for_name(name, firstWordOnly = False, default = 1):
     return default
 
 def colour_id_for_names(name1, name2, default = 1):
-    if name1 == name2 or name2.strip() == "":
+    if name1 == name2 or name2.strip() == "" or name2.lower() == "unknown" or name2.lower() == "n/a":
         return colour_id_for_name(name1, True)
     for cid, cname in colours:
         if cname.upper().find(name1.upper()) != -1 and cname.upper().find(name2.upper()) != -1:
             return int(cid)
     return default
 
-def colour_from_db(name, default = 2):
+def colour_from_db(name, default = 1):
     """ Looks up the colour in the db when the conversion is run, assign to BaseColourID """
     return "COALESCE((SELECT ID FROM basecolour WHERE lower(BaseColour) LIKE lower('%s') LIMIT 1), %d)" % (name.strip(), default)
 
@@ -452,6 +532,7 @@ species = (
 )
 
 def species_id_for_name(name):
+    if name is None: return 1
     for sid, sname in species:
         if sname.upper().find(name.upper()) != -1:
             return int(sid)
@@ -584,6 +665,7 @@ breeds = (
 ("90","French Bulldog"),
 ("91","German Pinscher"),
 ("92","German Shepherd Dog"),
+("92","GSD"),
 ("93","German Shorthaired Pointer"),
 ("94","German Wirehaired Pointer"),
 ("95","Glen of Imaal Terrier"),
@@ -649,6 +731,8 @@ breeds = (
 ("155","Petit Basset Griffon Vendeen"),
 ("156","Pharaoh Hound"),
 ("157","Pit Bull Terrier"),
+("157","Pitbull Terrier"),
+("157","Pitbull"),
 ("158","Plott Hound"),
 ("159","Portugese Podengo"),
 ("160","Pointer"),
@@ -733,6 +817,7 @@ breeds = (
 ("239","Cymric"),
 ("240","Devon Rex"),
 ("243","Domestic Long Hair"),
+("243","Domestic Semi L/H"),
 ("243","DLH"),
 ("252","Domestic Medium Hair"),
 ("252","DMH"),
@@ -904,6 +989,7 @@ breeds = (
 )
 
 def breed_id_for_name(name, default = 1):
+    if name is None: return default
     if name.find(" x") != -1 or name.find(" X") != -1:
         name = name.replace(" x", "").replace(" X", "")
     # try a complete match first
@@ -930,21 +1016,21 @@ def breed_name(id1, id2 = None):
     if id2 is None or id2 == 0:
         return breed_name_for_id(id1)
     return breed_name_for_id(id1) + " / " + breed_name_for_id(id2)
-
+   
 def breed_ids(a, breed1, breed2 = "", default = 1):
-	a.BreedID = breed_id_for_name(breed1, default)
-	a.Breed2ID = a.BreedID
-	a.BreedName = breed_name_for_id(a.BreedID)
-	a.CrossBreed = 0
-	if breed2 is not None and breed2.strip() != "":
-		a.CrossBreed = 1
-		if breed2 == "Mix" or breed2 == "Unknown":
-			a.Breed2ID = 442
-		else:
-			a.Breed2ID = breed_id_for_name(breed2, default)
-		if a.Breed2ID == 1: a.Breed2ID = 442
+    a.BreedID = breed_id_for_name(breed1, default)
+    a.Breed2ID = a.BreedID
+    a.BreedName = breed_name_for_id(a.BreedID)
+    a.CrossBreed = 0
+    if breed2 is not None and breed2.strip() != "":
+        a.CrossBreed = 1
+        if breed2 == "Mix" or breed2 == "Unknown":
+            a.Breed2ID = 442
+        else:
+            a.Breed2ID = breed_id_for_name(breed2, default)
+        if a.Breed2ID == 1: a.Breed2ID = 442
         if a.Breed2ID != a.BreedID: 
-        	a.BreedName = "%s / %s" % ( breed_name_for_id(a.BreedID), breed_name_for_id(a.Breed2ID) )
+            a.BreedName = "%s / %s" % ( breed_name_for_id(a.BreedID), breed_name_for_id(a.Breed2ID) )
 
 def breed_from_db(name, default = 2):
     """ Looks up the breed in the db when the conversion is run, assign to BreedID """
@@ -958,10 +1044,14 @@ def incidenttype_from_db(name, default = 1):
     """ Looks up the type in the db when the conversion is run, assign to IncidentTypeID """
     return "COALESCE((SELECT ID FROM incidenttype WHERE lower(IncidentName) LIKE lower(%s) LIMIT 1), %d)" % (ds(name.strip()), default)
 
+def jurisdiction_from_db(name, default = 1):
+    """ Looks up the jurisdiction in the db when the conversion is run, assign to JurisdictionID """
+    return "COALESCE((SELECT ID FROM jurisdiction WHERE lower(JurisdictionName) LIKE lower('%s') LIMIT 1), %d)" % (name.strip(), default)
+
 def location_id_for_name(name, createIfNotExist = True):
     global locations
     if name.strip() == "": return 1
-    if locations.has_key(name):
+    if name in locations:
         return locations[name].ID
     else:
         locations[name] = Location(Name=name)
@@ -974,7 +1064,7 @@ def location_from_db(name, default = 2):
 def pickuplocation_id_for_name(name, createIfNotExist = True):
     global pickuplocations
     if name.strip() == "": return 1
-    if pickuplocations.has_key(name):
+    if name in pickuplocations:
         return pickuplocations[name].ID
     else:
         pickuplocations[name] = PickupLocation(Name=name)
@@ -987,7 +1077,7 @@ def pickuplocation_from_db(name, default = 2):
 def customcolour_id_for_name(name, createIfNotExist = True):
     global customcolours
     if name.strip() == "": return 1
-    if customcolours.has_key(name):
+    if name in customcolours:
         return customcolours[name].ID
     else:
         customcolours[name] = BaseColour(Name=name)
@@ -996,7 +1086,7 @@ def customcolour_id_for_name(name, createIfNotExist = True):
 def entryreason_id_for_name(name, createIfNotExist = True):
     global entryreasons
     if name.strip() == "": return 1
-    if entryreasons.has_key(name):
+    if name in entryreasons:
         return entryreasons[name].ID
     else:
         entryreasons[name] = EntryReason(Name=name)
@@ -1010,10 +1100,17 @@ def size_from_db(name, default = 1):
     """ Looks up the size in the db when the conversion is run, assign to animal.Size """
     return "COALESCE((SELECT ID FROM lksize WHERE lower(Size) LIKE lower('%s') LIMIT 1), %d)" % (name.strip(), default)
 
+def size_id_for_name(name):
+    name = name.lower()
+    if name.startswith("v") or name.startswith("x"): return 0
+    if name.startswith("l"): return 1
+    if name.startswith("s"): return 2
+    return 3
+
 def donationtype_id_for_name(name, createIfNotExist = True):
     global donationtypes
     if name.strip() == "": return 1
-    if donationtypes.has_key(name):
+    if name in donationtypes:
         return donationtypes[name].ID
     else:
         donationtypes[name] = DonationType(Name=name)
@@ -1030,7 +1127,7 @@ def licencetype_from_db(name, default = 1):
 def testtype_id_for_name(name, createIfNotExist = True):
     global testtypes
     if name.strip() == "": return 1
-    if testtypes.has_key(name):
+    if name in testtypes:
         return testtypes[name].ID
     else:
         testtypes[name] = TestType(Name=name)
@@ -1043,7 +1140,7 @@ def vaccinationtype_from_db(name, default = 1):
 def vaccinationtype_id_for_name(name, createIfNotExist = True):
     global vaccinationtypes
     if name.strip() == "": return 1
-    if vaccinationtypes.has_key(name):
+    if name in vaccinationtypes:
         return vaccinationtypes[name].ID
     else:
         vaccinationtypes[name] = VaccinationType(Name=name)
@@ -1061,6 +1158,7 @@ types = (
 )
 
 def type_id_for_name(name):
+    if name is None: return 2
     for tid, tname in types:
         if tname.upper().find(name.upper()) != -1:
             return int(tid)
@@ -1080,7 +1178,10 @@ def strip(s):
     """
     Remove any unicode or control characters and whitespace
     """
-    if type(s) != str and type(s) != unicode: return s
+    if sys.version_info[0] > 2: 
+        if type(s) != str: return s # PYTHON3
+    else:
+        if type(s) != str and type(s) != unicode: return s # PYTHON2
     return ("".join(i for i in s if ord(i) >= 32 and ord(i)<128)).strip()
 
 def strip_unicode(s):
@@ -1176,7 +1277,7 @@ def find_row(d, fieldname, value):
     row where fieldname = value
     """
     for x in d:
-        if not x.has_key(fieldname):
+        if fieldname not in x:
             break
         if x[fieldname] == value:
             return x
@@ -1188,7 +1289,7 @@ def find_value(d, fieldname, value, findfield):
     where fieldname = value
     """
     for x in d:
-        if not x.has_key(fieldname) or not x.has_key(findfield):
+        if fieldname not in x or findfield not in x:
             break
         if x[fieldname] == value:
             return x[findfield]
@@ -1207,7 +1308,7 @@ def makesql(table, s):
 
 def getid(table = "animal"):
     global ids
-    if ids.has_key(table):
+    if table in ids:
         nextid = ids[table]
         ids[table] = nextid + 1
         return nextid
@@ -1262,6 +1363,12 @@ def date_diff(date1, date2):
         months = int((months / 52.0) * 12)
         return "%d years %d months." % (years, months)
 
+def todatetime(d):
+    """ If d is a datetime.date returns it as a datetime.datetime """
+    if d is None: return None
+    if type(d) == datetime.date: d = datetime.datetime.combine(d, datetime.time())
+    return d
+
 def add_days(d, dy):
     if d is None: return d
     return d + datetime.timedelta(days=dy)
@@ -1272,11 +1379,11 @@ def subtract_days(d, dy):
 
 def additional_field(fieldname, linktypeid, linkid, value):
     """ Writes an additional field entry """
-    print "DELETE FROM additional WHERE LinkType=%d AND LinkID=%d AND AdditionalFieldID = " \
-        "(SELECT ID FROM additionalfield WHERE FieldName LIKE '%s');" % (linktypeid, linkid, fieldname)
-    print "INSERT INTO additional (LinkType, LinkID, AdditionalFieldID, Value) VALUES (" \
+    print("DELETE FROM additional WHERE LinkType=%d AND LinkID=%d AND AdditionalFieldID = " \
+        "(SELECT ID FROM additionalfield WHERE FieldName LIKE '%s');" % (linktypeid, linkid, fieldname))
+    print("INSERT INTO additional (LinkType, LinkID, AdditionalFieldID, Value) VALUES (" \
         "%d, %d, (SELECT ID FROM additionalfield WHERE FieldName LIKE '%s'), %s);" % \
-        ( linktypeid, linkid, fieldname, ds(value))
+        ( linktypeid, linkid, fieldname, ds(value)))
 
 def age_group(dob):
     """ Returns the age group for a date of birth """
@@ -1304,7 +1411,6 @@ def adopt_to(a, ownerid, movementtype = 1, movementdate = None):
     a.ActiveMovementID = m.ID
     a.ActiveMovementDate = m.MovementDate
     a.ActiveMovementType = m.MovementType
-    print m
     return m
 
 def adopt_older_than(animals, movements, ownerid=100, days=365):
@@ -1331,14 +1437,39 @@ def animal_image(animalid, imagedata):
     mediaid = getid("media")
     medianame = str(mediaid) + '.jpg'
     encoded = base64.b64encode(imagedata)
-    print "UPDATE media SET websitephoto = 0, docphoto = 0 WHERE linkid = %d AND linktypeid = 0;" % animalid
-    print "INSERT INTO media (id, medianame, medianotes, mediasize, mediamimetype, websitephoto, docphoto, newsincelastpublish, updatedsincelastpublish, " \
+    if sys.version_info[0] > 2: encoded = encoded.decode("ascii") # PYTHON3
+    print("UPDATE media SET websitephoto = 0, docphoto = 0 WHERE linkid = %d AND linktypeid = 0;" % animalid)
+    print("INSERT INTO media (id, medianame, medianotes, mediasize, mediamimetype, websitephoto, docphoto, newsincelastpublish, updatedsincelastpublish, " \
         "excludefrompublish, linkid, linktypeid, recordversion, date) VALUES (%d, '%s', %s, %s, 'image/jpeg', 1, 1, 0, 0, 0, %d, 0, 0, %s);" % \
-        ( mediaid, medianame, ds(""), len(imagedata), animalid, dd(datetime.datetime.today()) )
-    print "INSERT INTO dbfs (id, name, path, content) VALUES (%d, '%s', '%s', '');" % ( getid("dbfs"), str(animalid), '/animal' )
+        ( mediaid, medianame, ds(""), len(imagedata), animalid, dd(datetime.datetime.today()) ))
+    print("INSERT INTO dbfs (id, name, path, content) VALUES (%d, '%s', '%s', '');" % ( getid("dbfs"), str(animalid), '/animal' ))
     dbfsid = getid("dbfs")
-    print "INSERT INTO dbfs (id, name, path, url, content) VALUES (%d, '%s', '%s', 'base64:', '%s');" % (dbfsid, medianame, "/animal/" + str(animalid), encoded)
-    print "UPDATE media SET DBFSID = %d WHERE ID = %d;" % (dbfsid, mediaid)
+    print("INSERT INTO dbfs (id, name, path, url, content) VALUES (%d, '%s', '%s', 'base64:', '%s');" % (dbfsid, medianame, "/animal/" + str(animalid), encoded))
+    print("UPDATE media SET DBFSID = %d WHERE ID = %d;" % (dbfsid, mediaid))
+
+def animal_test(animalid, required, given, typename, resultname, comments = ""):
+    """ Returns an animaltest object """
+    result = 1 # Unknown
+    if resultname.lower().find("egative"): result = 2
+    elif resultname.lower().find("ositive"): result = 3
+    av = AnimalTest()
+    av.AnimalID = animalid
+    av.DateRequired = required
+    av.DateOfTest = given
+    av.TestTypeID = testtype_id_for_name(typename, True)
+    av.TestResultID = result
+    av.Comments = comments
+    return av
+
+def animal_vaccination(animalid, required, given, typename, comments = ""):
+    """ Returns an animalvaccination object """
+    av = AnimalVaccination()
+    av.AnimalID = animalid
+    av.DateRequired = required
+    av.DateOfVaccination = given
+    av.VaccinationID = vaccinationtype_id_for_name(typename, True)
+    av.Comments = comments
+    return av
 
 def animal_regimen_single(animalid, dategiven, treatmentname, dosage = "", comments = ""):
     """ Writes a regimen and treatment record for a single given treatment """
@@ -1399,6 +1530,16 @@ def load_image_from_file(filename):
     except:
         return None
 
+def load_image_from_url(imageurl):
+    try:
+        sys.stderr.write("GET %s\n" % imageurl)
+        jpgdata = urllib2.urlopen(imageurl).read()
+        sys.stderr.write("200 OK %s\n" % imageurl)
+    except Exception as err:
+        sys.stderr.write(str(err) + "\n")
+        return None
+    return jpgdata
+
 def petfinder_get_adoptable(shelterid):
     """
     Returns the page of adoptable animals for the PetFinder shelterid
@@ -1409,7 +1550,7 @@ def petfinder_get_adoptable(shelterid):
     try:
         page = urllib2.urlopen(url).read()
         return page
-    except Exception,err:
+    except Exception as err:
         sys.stderr.write(str(err) + "\n")
         return ""
 
@@ -1428,14 +1569,54 @@ def petfinder_image(page, animalid, animalname):
     petid = regex(chunk, r"\/petdetail\/(.+?)\"")
     sys.stderr.write("Got PetID: %s\n" % petid)
     imageurl = "http://photos.petfinder.com/photos/pets/%s/1/?bust=1425358987&width=632&no_scale_up=1" % petid
-    try:
-        sys.stderr.write("GET %s\n" % imageurl)
-        jpgdata = urllib2.urlopen(imageurl).read()
-        sys.stderr.write("Got image from %s\n" % imageurl)
-    except Exception,err:
-        sys.stderr.write(str(err) + "\n")
-        return
+    jpgdata = load_image_from_url(imageurl)
     animal_image(animalid, jpgdata)
+
+def get_url(url, headers = {}, cookies = {}, timeout = None):
+    """
+    Retrieves a URL
+    """
+    # requests timeout is seconds/float, but some may call this with integer ms instead so convert
+    if timeout is not None and timeout > 1000: timeout = timeout / 1000.0
+    r = requests.get(url, headers = headers, cookies=cookies, timeout=timeout)
+    return { "cookies": r.cookies, "headers": r.headers, "response": r.text, "status": r.status_code, "requestheaders": r.request.headers, "requestbody": r.request.body }
+
+def get_image_url(url, headers = {}, cookies = {}, timeout = None):
+    """
+    Retrives an image from a URL
+    """
+    # requests timeout is seconds/float, but some may call this with integer ms instead so convert
+    if timeout is not None and timeout > 1000: timeout = timeout / 1000.0
+    r = requests.get(url, headers = headers, cookies=cookies, timeout=timeout, stream=True)
+    s = StringIO()
+    for chunk in r:
+        s.write(chunk) # default from requests is 128 byte chunks
+    return { "cookies": r.cookies, "headers": r.headers, "response": s.getvalue(), "status": r.status_code, "requestheaders": r.request.headers, "requestbody": r.request.body }
+        
+def post_data(url, data, contenttype = "", httpmethod = "", headers = {}):
+    """ 
+    Posts data to a URL as the body
+    httpmethod: POST by default
+    """
+    try:
+        if contenttype != "": headers["Content-Type"] = contenttype
+        req = urllib2.Request(url, data, headers)
+        if httpmethod != "": req.get_method = lambda: httpmethod
+        resp = urllib2.urlopen(req)
+        return { "requestheaders": headers, "requestbody": data, "headers": resp.info().headers, "response": resp.read(), "status": resp.getcode() }
+    except urllib2.HTTPError as e:
+        return { "requestheaders": headers, "requestbody": data, "headers": e.info().headers, "response": e.read(), "status": e.getcode() }
+    
+def post_form(url, fields, headers = {}, cookies = {}):
+    """
+    Does a form post
+    url: The http url to post to
+    fields: A map of { name: value } elements
+    headers: A map of { name: value } headers
+    return value is the http headers (a map) and server's response as a string
+    """
+    r = requests.post(url, data=fields, headers=headers, cookies=cookies)
+    return { "cookies": r.cookies, "headers": r.headers, "response": r.text, "status": r.status_code, "requestheaders": r.request.headers, "requestbody": r.request.body }
 
 class AnimalType:
     ID = 0
@@ -1481,7 +1662,7 @@ class Breed:
         if ID == 0: self.ID = getid("breed")
         self.Name = Name
         self.Description = Description
-	self.SpeciesID = SpeciesID
+        self.SpeciesID = SpeciesID
     def __str__(self):
         s = (
             ( "ID", di(self.ID) ),
@@ -1577,7 +1758,7 @@ class TestType:
         s = (
             ( "ID", di(self.ID) ),
             ( "TestName", ds(self.Name) ),
-            ( "TestDescription", ds(self.Description) )
+            ( "TestDescription", ds(self.Description) ),
             ( "DefaultCost", df(self.DefaultCost) ),
             )
         return makesql("testtype", s)
@@ -2201,10 +2382,10 @@ class Owner:
             self.OwnerSurname = name[lastspace+1:]
     def __str__(self):
         if self.OwnerName.strip() == "":
-            self.OwnerName = self.OwnerForeNames + " " + self.OwnerSurname
+            self.OwnerName = "%s %s" % (self.OwnerForeNames, self.OwnerSurname)
         if self.OwnerCode.strip() == "":
             prefix = "XX"
-            if len(self.OwnerSurname) >= 2 and not self.OwnerSurname.startswith("&"):
+            if self.OwnerSurname and len(self.OwnerSurname) >= 2 and not self.OwnerSurname.startswith("&"):
                 prefix = self.OwnerSurname[0:2].upper()
             self.OwnerCode = "%s%s" % (prefix, padleft(self.ID, 6))
         s = (
